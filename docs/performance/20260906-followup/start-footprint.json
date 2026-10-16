@@ -1,0 +1,122 @@
+{
+  "kind": "start-footprint",
+  "generated_at": "2026-09-06T11:45:21+08:00",
+  "source_tool": "performance-snapshot 0.1.0",
+  "count": 14,
+  "shadow_total_phys_footprint_mib": 6366.0,
+  "processes": [
+    {
+      "pid": 69503,
+      "service": "cotype",
+      "phys_footprint_mib": 13.0,
+      "phys_footprint_peak_mib": 14.0,
+      "header_footprint_mib": 13.0,
+      "exe": "Cotype"
+    },
+    {
+      "pid": 90632,
+      "service": "dictation",
+      "phys_footprint_mib": 986.0,
+      "phys_footprint_peak_mib": 1015.0,
+      "header_footprint_mib": 986.0,
+      "exe": "local-dictation"
+    },
+    {
+      "pid": 90734,
+      "service": "dictation",
+      "phys_footprint_mib": 1568.0,
+      "phys_footprint_peak_mib": 1848.0,
+      "header_footprint_mib": 1568.0,
+      "exe": "cohere-mlx-bridge"
+    },
+    {
+      "pid": 19220,
+      "service": "local-models-bar",
+      "phys_footprint_mib": 20.0,
+      "phys_footprint_peak_mib": 21.0,
+      "header_footprint_mib": 20.0,
+      "exe": "LocalModelsBar"
+    },
+    {
+      "pid": 52181,
+      "service": "local-models-daemon",
+      "phys_footprint_mib": 20.0,
+      "phys_footprint_peak_mib": 21.0,
+      "header_footprint_mib": 20.0,
+      "exe": "Python"
+    },
+    {
+      "pid": 54438,
+      "service": "local-models-daemon",
+      "phys_footprint_mib": 511.0,
+      "phys_footprint_peak_mib": 546.0,
+      "header_footprint_mib": 511.0,
+      "exe": "llama-server"
+    },
+    {
+      "pid": 1175,
+      "service": "local-models-vision-server",
+      "phys_footprint_mib": 2657.0,
+      "phys_footprint_peak_mib": 10240.0,
+      "header_footprint_mib": 2657.0,
+      "exe": "Python"
+    },
+    {
+      "pid": 75565,
+      "service": "local-models-vision-server",
+      "phys_footprint_mib": 10.0,
+      "phys_footprint_peak_mib": 10.0,
+      "header_footprint_mib": 10.0,
+      "exe": "Python"
+    },
+    {
+      "pid": 75623,
+      "service": "memory",
+      "phys_footprint_mib": 10.0,
+      "phys_footprint_peak_mib": 11.0,
+      "header_footprint_mib": 10.0,
+      "exe": "memory-bar"
+    },
+    {
+      "pid": 98779,
+      "service": "pocket-tts",
+      "phys_footprint_mib": 331.0,
+      "phys_footprint_peak_mib": 368.0,
+      "header_footprint_mib": 331.0,
+      "exe": "pocket-tts"
+    },
+    {
+      "pid": 73623,
+      "service": "quick-launch",
+      "phys_footprint_mib": 41.0,
+      "phys_footprint_peak_mib": 42.0,
+      "header_footprint_mib": 41.0,
+      "exe": "quick-launch"
+    },
+    {
+      "pid": 69797,
+      "service": "rti",
+      "phys_footprint_mib": 110.0,
+      "phys_footprint_peak_mib": 232.0,
+      "header_footprint_mib": 110.0,
+      "exe": "RTI"
+    },
+    {
+      "pid": 98622,
+      "service": "screenctx",
+      "phys_footprint_mib": 65.0,
+      "phys_footprint_peak_mib": 177.0,
+      "header_footprint_mib": 65.0,
+      "exe": "screenctx"
+    },
+    {
+      "pid": 19216,
+      "service": "usage",
+      "phys_footprint_mib": 24.0,
+      "phys_footprint_peak_mib": 25.0,
+      "header_footprint_mib": 24.0,
+      "exe": "usage-bar"
+    }
+  ],
+  "note": "START-of-window physical footprint. Safe labels only. phys_footprint is the authoritative physical-memory number; sum is an additive shadow total (shared pages may be counted twice) and is not a system-wide free-RAM claim."
+}

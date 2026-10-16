@@ -1,0 +1,41 @@
+{
+  "date": "2026-09-06",
+  "memory": {
+    "commit": "ebf464e",
+    "installed_sha256": "d3475a01254dcea071f90117bdb80193c6c395865e10042a6c56bddcfdeabf52",
+    "doctor_exit": 0,
+    "unit_tests": 59,
+    "visual_fixture_review": "pass"
+  },
+  "recall": {
+    "commit": "4f09eca",
+    "installed_sha256": "da98b7f45f7603c184a4a600c7d01fc9c994ccacd05ba401b1fdd7318296b572",
+    "unit_tests": 80,
+    "installed_capture_cli_json_gates": "pass",
+    "installed_differential_against_235072f": "pass"
+  },
+  "local_models": {
+    "commit": "f116261",
+    "unit_tests": 50,
+    "health": "ok",
+    "warm_models": [
+      "qwen3-vl",
+      "s1-mini"
+    ]
+  },
+  "local_tts": {
+    "commit": "4a61a41",
+    "unit_tests": 26,
+    "runtime_changed": false,
+    "documentation_fix_commit": "54ed2c5"
+  },
+  "design_system": {
+    "unit_tests": 65
+  },
+  "limitations": [
+    "Visual fixtures do not prove live poll timing",
+    "One-minute process observations are not five-minute idle certification",
+    "Removed831MB is summed process footprint, not an exact system-free-RAM delta",
+    "Unchanged apps were source-audited, not exhaustively traced with Instruments"
+  ]
+}

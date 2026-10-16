@@ -1,0 +1,166 @@
+#!/usr/bin/env python3
+"""install-hooks - put the design ratchet in front of every house commit.
+
+Writes two things into each house repo:
+
+  .git/hooks/pre-commit   runs `design-lint --changed`, refuses the commit when
+                          a touched file exceeds its baseline.
+  .claude/settings.json   a Stop hook that blocks a session ending on drift and
+                          a PostToolUse hook that warns the moment an edit lands.
+
+Idempotent. An existing pre-commit that is not ours is kept and chained: it is
+moved to pre-commit.local and run first, so nothing is lost.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import stat
+import sys
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+LINT = HERE / "design-lint"
+HOUSE = HERE.parent.parent
+
+def house_repos(house: Path):
+    """Every git repo directly under house/. Discovered, not listed, so a repo
+    that joins the family is covered the next time this runs."""
+    return sorted(p for p in house.iterdir() if (p / ".git").exists())
+
+MARK = "# design-lint pre-commit (installed by design-system/bin/install-hooks)"
+
+PRE_COMMIT = f"""#!/bin/sh
+{MARK}
+# Chain whatever was here before us.
+if [ -x "$(dirname "$0")/pre-commit.local" ]; then
+  "$(dirname "$0")/pre-commit.local" "$@" || exit $?
+fi
+
+LINT="{LINT}"
+[ -x "$LINT" ] || {{ echo "design-lint missing at $LINT; skipping design check" >&2; exit 0; }}
+
+root=$(git rev-parse --show-toplevel)
+"$LINT" --changed --verbose --no-color "$root" || {{
+  echo "" >&2
+  echo "Commit refused: the design ratchet went up." >&2
+  echo "Use a token (House./AQDesign.), or argue the exception in .design-lint-allow." >&2
+  echo "Bypass once with: git commit --no-verify" >&2
+  exit 1
+}}
+exit 0
+"""
+
+STOP_HOOK = """#!/bin/sh
+# design-lint Stop hook. Blocks the session ending while a repo is over its
+# baseline. Fast, and silent when the tool is absent. The lint is found
+# relative to this repo (house/<repo>/.claude/hooks -> house/design-system),
+# so the tracked file carries no user path.
+LINT="$(cd "$(dirname "$0")/../../.." && pwd)/design-system/bin/design-lint"
+[ -x "$LINT" ] || { echo "design-lint missing; design check skipped" >&2; exit 0; }
+exec "$LINT" --hook stop "$CLAUDE_PROJECT_DIR"
+"""
+
+POST_TOOL_HOOK = """#!/bin/sh
+# design-lint PostToolUse hook. One line to stderr, exit 2, so the model sees a
+# literal the moment it writes one.
+LINT="$(cd "$(dirname "$0")/../../.." && pwd)/design-system/bin/design-lint"
+[ -x "$LINT" ] || exit 0
+exec "$LINT" --hook post-tool "$CLAUDE_PROJECT_DIR"
+"""
+
+
+def settings(repo_dir: Path):
+    hooks = repo_dir / ".claude" / "hooks"
+    return {
+        "hooks": {
+            # $CLAUDE_PROJECT_DIR keeps the tracked settings free of user paths.
+            "Stop": [{"hooks": [{"type": "command",
+                                 "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/design-stop.sh",
+                                 "timeout": 10}]}],
+            "PostToolUse": [{"matcher": "Edit|Write|MultiEdit",
+                             "hooks": [{"type": "command",
+                                        "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/design-post-tool.sh",
+                                        "timeout": 10}]}],
+        }
+    }
+
+
+def make_executable(path: Path):
+    path.chmod(path.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+
+
+def install_pre_commit(repo: Path, log):
+    hooks = repo / ".git" / "hooks"
+    if not hooks.parent.is_dir():
+        log(f"  skip pre-commit (not a git repo)")
+        return
+    hooks.mkdir(parents=True, exist_ok=True)
+    target = hooks / "pre-commit"
+    if target.exists():
+        existing = target.read_text(errors="replace")
+        if MARK in existing:
+            target.write_text(PRE_COMMIT)
+            make_executable(target)
+            log("  pre-commit  updated")
+            return
+        local = hooks / "pre-commit.local"
+        if not local.exists():
+            target.rename(local)
+            make_executable(local)
+            log("  pre-commit  chained the existing hook to pre-commit.local")
+        else:
+            log("  pre-commit  pre-commit.local already present, left as is")
+    target.write_text(PRE_COMMIT)
+    make_executable(target)
+    log("  pre-commit  installed")
+
+
+def install_claude(repo: Path, log):
+    hooks = repo / ".claude" / "hooks"
+    hooks.mkdir(parents=True, exist_ok=True)
+    for name, body in (("design-stop.sh", STOP_HOOK), ("design-post-tool.sh", POST_TOOL_HOOK)):
+        (hooks / name).write_text(body)
+        make_executable(hooks / name)
+    path = repo / ".claude" / "settings.json"
+    want = settings(repo)
+    current = {}
+    if path.exists():
+        try:
+            current = json.loads(path.read_text())
+        except ValueError:
+            log("  settings.json  unparseable, replaced")
+            current = {}
+    merged = dict(current)
+    merged.setdefault("hooks", {})
+    # Replace only our two entries; anything else in the file survives.
+    for event, entries in want["hooks"].items():
+        others = [e for e in merged["hooks"].get(event, [])
+                  if not any("design-" in h.get("command", "")
+                             for h in e.get("hooks", []))]
+        merged["hooks"][event] = others + entries
+    path.write_text(json.dumps(merged, indent=2) + "\n")
+    log("  .claude/settings.json  Stop + PostToolUse hooks")
+
+
+def main(argv=None):
+    ap = argparse.ArgumentParser(prog="install-hooks", description=__doc__.split("\n")[0])
+    ap.add_argument("repos", nargs="*", help="repo paths (default: every house repo)")
+    ap.add_argument("--house", default=str(HOUSE), help="the house directory")
+    args = ap.parse_args(argv)
+
+    house = Path(args.house).resolve()
+    paths = [Path(r).resolve() for r in args.repos] or house_repos(house)
+    for repo in paths:
+        if not repo.is_dir():
+            print(f"● {repo.name} absent, skipped")
+            continue
+        print(f"● {repo.name}")
+        install_pre_commit(repo, print)
+        install_claude(repo, print)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

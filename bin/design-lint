@@ -1,0 +1,478 @@
+#!/usr/bin/env python3
+"""design-lint - hold the house design system at the view layer.
+
+A token file in a repo is plumbing, not a look. This scans the view layer for
+the literals that mean drift: hard radii, colour names, raw font sizes, hex
+colours, AppKit system colours. It also checks that every copied token file
+carries the current tokens.json sha.
+
+Default mode is a ratchet: it exits 1 only when a count EXCEEDS the baseline
+recorded in .design-lint-baseline.json, so it bites on new drift and tolerates
+the debt a repo already carries. --strict exits 1 on any hit at all.
+
+No third-party imports. Deterministic output: sorted paths, no timestamps.
+"""
+from __future__ import annotations
+
+import argparse
+import fnmatch
+import json
+import os
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+ROOT = HERE.parent
+sys.path.insert(0, str(ROOT / "gen"))
+try:
+    import common  # noqa: E402  (design-system/gen/common.py)
+except Exception:  # pragma: no cover - only when run outside the repo
+    common = None
+
+BASELINE_NAME = ".design-lint-baseline.json"
+ALLOW_NAME = ".design-lint-allow"
+GENERATED_MARK = "GENERATED from design-system/tokens.json"
+TOKEN_FILES = ("HouseDesign.swift", "house_theme.rs")
+
+SKIP_DIRS = {
+    ".build", ".deriveddata", "deriveddata", "target", "dist", "build",
+    "node_modules", ".git", "tests", "rendertests", ".swiftpm", "__pycache__",
+    "sourcepackages", "checkouts", "pods", "carthage",
+}
+# Xcode writes sibling build dirs (`.deriveddata-tests`); vendored dependency
+# code inside them is nobody's view layer.
+SKIP_PREFIXES = (".build", ".deriveddata", "deriveddata")
+
+
+def skip_dir(name: str) -> bool:
+    low = name.lower()
+    return low in SKIP_DIRS or low.startswith(SKIP_PREFIXES)
+
+# Value-position rules require a digit, so `House.Radius.md` never matches.
+# Order matters: an earlier rule wins an overlapping span (Font.system before
+# the bare .system).
+SWIFT_RULES = [
+    ("corner-radius-literal", r"cornerRadius:\s*-?\d"),
+    ("corner-radius-modifier", r"\.cornerRadius\(\s*-?\d"),
+    ("colour-name", r"\bColor\.(?:blue|gray|red|green|orange|purple|accentColor)\b"),
+    ("colour-components", r"\bColor\(\s*red:"),
+    ("nscolour-components", r"\bNSColor\(\s*(?:red|srgbRed|calibratedRed):"),
+    ("font-size-literal", r"\bFont\.system\(\s*size:\s*-?\d"),
+    ("system-size-literal", r"\.system\(\s*size:\s*-?\d"),
+    ("hierarchical-ink", r"\.foregroundStyle\(\s*\.(?:secondary|tertiary)\b"),
+    ("secondary-ink", r"\.foregroundColor\(\s*\.secondary\b"),
+    ("hex-colour", r"#[0-9a-fA-F]{6}\b"),
+]
+
+RUST_RULES = [
+    ("font-size-literal", r"\bsystemFontOfSize(?:_weight)?\s*\(\s*-?\d"),
+    ("nscolour-system",
+     r"\bNSColor::(?:whiteColor|blackColor|labelColor|secondaryLabelColor|systemBlueColor)\s*\("),
+    ("nscolour-components", r"\bNSColor::colorWithSRGBRed_green_blue_alpha\s*\(\s*-?\d"),
+    # objc2 reaches AppKit two ways: a bound method and a raw `msg_send!`.
+    ("corner-radius-literal", r"\bsetCornerRadius\s*[(:]\s*-?\d"),
+]
+
+RULES = {
+    ".swift": [(n, re.compile(p)) for n, p in SWIFT_RULES],
+    ".rs": [(n, re.compile(p)) for n, p in RUST_RULES],
+}
+
+# A match preceded by one of these is a token reference, not a literal.
+TOKEN_PREFIXES = ("House.", "AQDesign.")
+
+
+# --------------------------------------------------------------------------
+# allowlist
+
+
+class Allow:
+    """`.design-lint-allow`: one entry per line, `#` comments.
+
+    `Sources/Views/RTIDesign.swift`   whole file exempt
+    `Sources/**.swift:speakerPalette` exempt lines matching the regex
+    Globs are fnmatch over the repo-relative posix path, so `*` crosses `/`.
+    """
+
+    def __init__(self, entries):
+        self.entries = entries
+
+    @classmethod
+    def load(cls, root: Path) -> "Allow":
+        path = root / ALLOW_NAME
+        entries = []
+        if path.is_file():
+            for raw in path.read_text(errors="replace").splitlines():
+                line = raw.split("#", 1)[0].strip()
+                if not line:
+                    continue
+                glob, sep, rx = line.partition(":")
+                entries.append((glob.strip(), re.compile(rx.strip()) if sep and rx.strip() else None))
+        return cls(entries)
+
+    def covers_file(self, rel: str) -> bool:
+        """True when a bare glob (no `:regex`) exempts the whole file."""
+        return any(rx is None and fnmatch.fnmatch(rel, glob) for glob, rx in self.entries)
+
+    def covers_line(self, rel: str, text: str) -> bool:
+        return any(rx is not None and fnmatch.fnmatch(rel, glob) and rx.search(text)
+                   for glob, rx in self.entries)
+
+
+# --------------------------------------------------------------------------
+# scanning
+
+
+def is_generated(first_line: str) -> bool:
+    return GENERATED_MARK in first_line
+
+
+def walk(root: Path):
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = sorted(d for d in dirnames if not skip_dir(d))
+        for name in sorted(filenames):
+            if Path(name).suffix in RULES:
+                yield Path(dirpath) / name
+
+
+def read_lines(path: Path):
+    try:
+        return path.read_text(errors="replace").splitlines()
+    except OSError:
+        return None
+
+
+def scan_file(path: Path, rel: str, allow: Allow):
+    """Return (hits, is_token_file, token_sha_or_None, skipped)."""
+    lines = read_lines(path)
+    if lines is None:
+        return [], False, None, True
+    first = lines[0] if lines else ""
+    token_file = path.name in TOKEN_FILES
+    sha = None
+    if token_file:
+        m = re.search(re.escape(GENERATED_MARK) + r"\s+([0-9a-f]{6,})", "\n".join(lines[:6]))
+        sha = m.group(1) if m else None
+    # A generated token file is plumbing, never a view: the sha check owns it.
+    if token_file or is_generated(first) or allow.covers_file(rel):
+        return [], token_file, sha, True
+
+    rules = RULES[path.suffix]
+    hits = []
+    for lineno, text in enumerate(lines, 1):
+        spans = []
+        for name, rx in rules:
+            for m in rx.finditer(text):
+                s, e = m.span()
+                if any(s < oe and os_ < e for os_, oe in spans):
+                    continue
+                before = text[max(0, s - 12):s]
+                if any(before.endswith(p) for p in TOKEN_PREFIXES):
+                    continue
+                if allow.covers_line(rel, text):
+                    continue
+                spans.append((s, e))
+                hits.append({"path": rel, "line": lineno, "col": s + 1, "rule": name,
+                             "text": text.strip()[:120]})
+    hits.sort(key=lambda h: (h["line"], h["col"], h["rule"]))
+    return hits, token_file, sha, False
+
+
+def changed_files(root: Path):
+    """Staged + unstaged + untracked paths, as absolute Paths."""
+    out = set()
+    for args in (["diff", "--name-only", "HEAD"],
+                 ["diff", "--name-only", "--cached"],
+                 ["ls-files", "--others", "--exclude-standard"]):
+        try:
+            r = subprocess.run(["git", "-C", str(root), *args],
+                               capture_output=True, text=True, timeout=10)
+        except (OSError, subprocess.SubprocessError):
+            return None
+        if r.returncode != 0:
+            if args[0] == "diff" and "HEAD" in args:
+                continue  # a repo with no commits yet
+            return None
+        for line in r.stdout.splitlines():
+            if line.strip():
+                out.add((root / line.strip()).resolve())
+    return out
+
+
+def load_baseline(root: Path):
+    path = root / BASELINE_NAME
+    if not path.is_file():
+        return {"total": 0, "files": {}}
+    try:
+        data = json.loads(path.read_text())
+    except (OSError, ValueError):
+        return {"total": 0, "files": {}}
+    return {"total": int(data.get("total", 0)), "files": dict(data.get("files", {}))}
+
+
+def scan_repo(root: Path, want_sha: str, only_changed: bool, only_paths=None):
+    root = root.resolve()
+    allow = Allow.load(root)
+    limit = changed_files(root) if only_changed else None
+    if only_paths is not None:
+        subset = {p.resolve() for p in only_paths}
+        limit = subset if limit is None else (limit & subset)
+    hits, token_files, scanned = [], [], 0
+    for path in walk(root):
+        if limit is not None and path.resolve() not in limit:
+            continue
+        rel = path.resolve().relative_to(root).as_posix()
+        file_hits, is_token, sha, skipped = scan_file(path, rel, allow)
+        if is_token:
+            token_files.append({"path": rel, "sha": sha, "ok": sha == want_sha})
+        if not skipped:
+            scanned += 1
+        hits.extend(file_hits)
+
+    by_file = {}
+    for h in hits:
+        by_file[h["path"]] = by_file.get(h["path"], 0) + 1
+    baseline = load_baseline(root)
+    over = []
+    for path in sorted(by_file):
+        base = int(baseline["files"].get(path, 0))
+        if by_file[path] > base:
+            over.append({"path": path, "count": by_file[path], "baseline": base})
+    total_over = (not only_changed) and len(hits) > baseline["total"]
+    stale = [t for t in token_files if not t["ok"]]
+    return {
+        "repo": str(root),
+        "name": root.name,
+        "files_scanned": scanned,
+        "total": len(hits),
+        "hits": sorted(hits, key=lambda h: (h["path"], h["line"], h["col"])),
+        "by_file": dict(sorted(by_file.items())),
+        "baseline": baseline,
+        "over_baseline": over,
+        "total_over_baseline": bool(total_over),
+        "token_files": sorted(token_files, key=lambda t: t["path"]),
+        "stale_token_files": sorted(stale, key=lambda t: t["path"]),
+        "changed_only": only_changed,
+    }
+
+
+# --------------------------------------------------------------------------
+# output (house terminal surface: monochrome, dot, rows, no banners)
+
+
+class Style:
+    def __init__(self, enabled):
+        self.on = enabled
+
+    def dot(self, state):
+        ch = "●"
+        if not self.on:
+            return ch
+        code = {"ok": "32", "bad": "31", "idle": "2"}[state]
+        return f"\033[{code}m{ch}\033[0m"
+
+    def bold(self, s):
+        return f"\033[1m{s}\033[0m" if self.on else s
+
+    def dim(self, s):
+        return f"\033[2m{s}\033[0m" if self.on else s
+
+
+def render(repo, style, out, verbose):
+    total, base = repo["total"], repo["baseline"]["total"]
+    over = repo["over_baseline"]
+    stale = repo["stale_token_files"]
+    if over or stale or repo["total_over_baseline"]:
+        state, word = "bad", "Drift"
+    elif total:
+        state, word = "idle", "Held"
+    else:
+        state, word = "ok", "Clean"
+    bits = [f"{total} hits", f"baseline {base}", f"{repo['files_scanned']} files"]
+    if repo["changed_only"]:
+        bits.append("changed only")
+    print(f"{style.dot(state)} {style.bold(repo['name'])} {word} · " + " · ".join(bits), file=out)
+
+    rows = sorted(repo["by_file"].items())
+    if rows:
+        width = min(max(len(p) for p, _ in rows), 56)
+        print("\n" + style.dim("HITS"), file=out)
+        over_paths = {o["path"]: o["baseline"] for o in over}
+        for path, count in rows:
+            rules = sorted({h["rule"] for h in repo["hits"] if h["path"] == path})
+            if path in over_paths:
+                detail = f"over baseline {over_paths[path]}"
+            else:
+                detail = f"baseline {repo['baseline']['files'].get(path, 0)}"
+            print(f"  {path:<{width}}  {count:>3}  {detail:<20}{', '.join(rules)}", file=out)
+            if verbose:
+                for h in repo["hits"]:
+                    if h["path"] == path:
+                        print(style.dim(f"      {h['line']}:{h['col']}  {h['rule']}  {h['text']}"), file=out)
+
+    if repo["token_files"]:
+        width = min(max(len(t["path"]) for t in repo["token_files"]), 56)
+        print("\n" + style.dim("TOKEN COPIES"), file=out)
+        for t in repo["token_files"]:
+            mark = "ok" if t["ok"] else f"stale  has {t['sha'] or 'no sha'}"
+            print(f"  {t['path']:<{width}}  {mark}", file=out)
+
+
+# --------------------------------------------------------------------------
+
+
+def write_baseline(repo):
+    path = Path(repo["repo"]) / BASELINE_NAME
+    payload = {
+        "_": "design-lint ratchet. Counts may only fall. Regenerate: design-lint --baseline write",
+        "total": repo["total"],
+        "files": repo["by_file"],
+    }
+    path.write_text(json.dumps(payload, indent=2, sort_keys=False) + "\n")
+    return path
+
+
+# --------------------------------------------------------------------------
+# Claude Code hook modes. Both read the hook payload on stdin and must be quiet
+# and quick; neither ever fails the session because of its own trouble.
+
+
+def hook_payload():
+    try:
+        raw = sys.stdin.read()
+    except OSError:
+        return {}
+    try:
+        return json.loads(raw) if raw.strip() else {}
+    except ValueError:
+        return {}
+
+
+def hook_root(payload, paths):
+    for candidate in (payload.get("cwd"), os.environ.get("CLAUDE_PROJECT_DIR"),
+                      *(paths or []), "."):
+        if candidate:
+            p = Path(candidate)
+            if p.is_dir():
+                return p.resolve()
+    return Path.cwd()
+
+
+def rows_for(repo, over):
+    lines = []
+    for entry in over:
+        hits = [h for h in repo["hits"] if h["path"] == entry["path"]]
+        rules = sorted({h["rule"] for h in hits})
+        lines.append(f"  {entry['path']}  {entry['count']} hits "
+                     f"(baseline {entry['baseline']})  {', '.join(rules)}")
+        for h in hits[:6]:
+            lines.append(f"      {h['line']}:{h['col']}  {h['rule']}  {h['text']}")
+    return lines
+
+
+def run_hook(kind, want, paths):
+    payload = hook_payload()
+    root = hook_root(payload, paths)
+
+    if kind == "post-tool":
+        target = (payload.get("tool_input") or {}).get("file_path")
+        if not target:
+            return 0
+        path = Path(target)
+        if path.suffix not in RULES or not path.is_file():
+            return 0
+        try:
+            path.resolve().relative_to(root)
+        except ValueError:
+            return 0
+        repo = scan_repo(root, want, False, only_paths=[path])
+        if not repo["hits"]:
+            return 0
+        rules = sorted({h["rule"] for h in repo["hits"]})
+        first = repo["hits"][0]
+        print(f"design-lint: {len(repo['hits'])} house-design literal(s) in {path.name} "
+              f"({', '.join(rules)}); first at line {first['line']}: {first['text']} "
+              f"— use a token (House./AQDesign.) or argue it in .design-lint-allow.",
+              file=sys.stderr)
+        return 2
+
+    # stop
+    if payload.get("stop_hook_active"):
+        return 0  # already blocked once; do not loop
+    repo = scan_repo(root, want, False)
+    over, stale = repo["over_baseline"], repo["stale_token_files"]
+    if not over and not stale and not repo["total_over_baseline"]:
+        return 0
+    reason = [f"design-lint: {repo['name']} is over its design baseline "
+              f"({repo['total']} hits, baseline {repo['baseline']['total']}). Fix these rows:"]
+    reason += rows_for(repo, over)
+    for t in stale:
+        reason.append(f"  {t['path']}  stale token copy (has {t['sha'] or 'no sha'}, "
+                      f"want {want}); recopy from design-system/generated")
+    reason.append("Use a token, or record a deliberate exception in .design-lint-allow. "
+                  "If this is accepted debt, run: design-lint --baseline write .")
+    print(json.dumps({"decision": "block", "reason": "\n".join(reason)}))
+    return 0
+
+
+def main(argv=None):
+    ap = argparse.ArgumentParser(prog="design-lint", description=__doc__.split("\n")[0])
+    ap.add_argument("paths", nargs="*", default=["."], help="repo paths to scan (default: .)")
+    ap.add_argument("--json", action="store_true", help="machine output")
+    ap.add_argument("--strict", action="store_true", help="exit 1 on any hit, baseline ignored")
+    ap.add_argument("--changed", action="store_true", help="only files changed in git")
+    ap.add_argument("--baseline", choices=["write", "check"], default="check",
+                    help="write: record current counts; check (default): ratchet against them")
+    ap.add_argument("-v", "--verbose", action="store_true", help="one row per hit")
+    ap.add_argument("--no-color", action="store_true", help="never emit escapes")
+    ap.add_argument("--tokens-sha", default=None, help="override the expected tokens.json sha")
+    ap.add_argument("--hook", choices=["stop", "post-tool"], default=None,
+                    help="Claude Code hook mode: read the payload on stdin")
+    args = ap.parse_args(argv)
+
+    want = args.tokens_sha or (common.tokens_sha() if common else "")
+    if args.hook:
+        try:
+            return run_hook(args.hook, want, args.paths)
+        except Exception as exc:  # a hook never breaks the session
+            print(f"design-lint hook error: {exc}", file=sys.stderr)
+            return 0
+    paths = args.paths or ["."]
+    repos = [scan_repo(Path(p), want, args.changed) for p in paths]
+
+    if args.baseline == "write":
+        written = [str(write_baseline(r)) for r in repos]
+        if args.json:
+            print(json.dumps({"wrote": written, "repos": repos}, indent=2))
+        else:
+            style = Style(False)
+            for r in repos:
+                print(f"{style.dot('ok')} {r['name']} baseline {r['total']} hits "
+                      f"· {len(r['by_file'])} files")
+        return 0
+
+    if args.strict:
+        failed = any(r["total"] or r["stale_token_files"] for r in repos)
+    else:
+        failed = any(r["over_baseline"] or r["total_over_baseline"] or r["stale_token_files"]
+                     for r in repos)
+
+    status = "drift" if failed else ("held" if any(r["total"] for r in repos) else "clean")
+    if args.json:
+        print(json.dumps({"repos": repos, "tokens_sha": want, "strict": args.strict,
+                          "total": sum(r["total"] for r in repos), "status": status,
+                          "exit": 1 if failed else 0}, indent=2))
+    else:
+        colour = not args.no_color and not os.environ.get("NO_COLOR") and sys.stdout.isatty()
+        style = Style(colour)
+        for i, r in enumerate(repos):
+            if i:
+                print(file=sys.stdout)
+            render(r, style, sys.stdout, args.verbose)
+    return 1 if failed else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

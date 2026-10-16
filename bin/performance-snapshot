@@ -1,0 +1,752 @@
+#!/usr/bin/env python3
+"""performance-snapshot — read-only, repeatable house-fleet CPU/RSS snapshot.
+
+Records the running house fleet (apps + local services) as a repeatable,
+machine-readable JSON baseline for performance work. Pairs cumulative process
+CPU-time deltas (not the instantaneous %CPU ps reports) with RSS and, on option,
+the footprint(1) physical-memory reading.
+
+Read-only by contract:
+  * never runs as root (refuses if euid==0)
+  * never restarts, signals, or modifies a process
+  * no network, no screenshots, no screen/private captures, no clipboard
+  * service discovery matches full argv strings in memory only; the JSON carries
+    only safe labels (pid, ppid, executable basename, service name) — never a raw
+    command line or an argv with private values
+  * platform/git info records chip/core/memory/OS and repo revision + dirty
+    paths; it deliberately omits hardware UUID, serial, and hostname
+
+No third-party imports. Field names are deterministic; only the values change.
+"""
+from __future__ import annotations
+
+import argparse
+import datetime
+import json
+import os
+from collections import defaultdict
+import platform
+import re
+import statistics
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+SCHEMA_VERSION = 1
+TOOL_NAME = "performance-snapshot"
+TOOL_VERSION = "0.1.0"
+PS_ARGV = ["ps", "-axww", "-o", "pid=,ppid=,rss=,time=,command="]
+# On macOS `comm=` is argv[0] (the executable path, spaces intact); used to anchor
+# bundle detection to the real executable rather than arbitrary argument text.
+PS_EXEC = ["ps", "-axww", "-o", "pid=,comm="]
+FOOTPRINT_BIN = "/usr/bin/footprint"
+MAX_ANCESTRY_DEPTH = 24
+
+# Seams so tests can drive the clock without real waiting or sampling.
+mono_clock = time.monotonic
+sleep = time.sleep
+
+
+def run_cmd(argv, timeout=None, env=None):
+    """Run a command and capture stdout/stderr as text."""
+    return subprocess.run(argv, capture_output=True, text=True, timeout=timeout, env=env)
+
+
+# --------------------------------------------------------------------------
+# CPU time parsing
+
+
+def parse_cpu_time(value):
+    """Parse a ps cumulative CPU-time string into seconds (float).
+
+    macOS ps emits [[DD-]hh:]mm:ss.ff, e.g. 0:00.00, 33:20.89, 1:02:03,
+    1-02:03:04.89. The seconds field may carry a fractional part. Raises
+    ValueError for anything unrecognised.
+    """
+    if value is None:
+        raise ValueError("cpu time is None")
+    s = value.strip()
+    if not s:
+        raise ValueError("empty cpu time")
+    days = 0
+    if "-" in s:
+        day_part, _, rest = s.partition("-")
+        try:
+            days = int(day_part)
+        except ValueError:
+            raise ValueError(f"unparseable cpu time: {value!r}") from None
+        s = rest
+    parts = s.split(":")
+    if len(parts) == 2:
+        minutes, seconds = parts
+        hours = 0
+    elif len(parts) == 3:
+        hours, minutes, seconds = parts
+    else:
+        raise ValueError(f"unparseable cpu time: {value!r}")
+    try:
+        return days * 86400 + int(hours) * 3600 + int(minutes) * 60 + float(seconds)
+    except ValueError:
+        raise ValueError(f"unparseable cpu time: {value!r}") from None
+
+
+# --------------------------------------------------------------------------
+# Service discovery. Full argv is matched in memory; only safe labels survive.
+
+
+class Matcher:
+    """A service rule anchored to ONE entrypoint field, not arbitrary argv text.
+
+    `pattern` is matched as a substring only against the chosen anchored field.
+    A rule that anchors `exe` to `local-tts` therefore fires only for a process
+    whose executable is literally `local-tts` — never for an argument that merely
+    mentions it (e.g. `--git-repo local-tts`), which classified the tool itself.
+    """
+    __slots__ = ("label", "group", "kind", "pattern")
+
+    def __init__(self, label, group, kind, pattern):
+        self.label, self.group, self.kind, self.pattern = label, group, kind, pattern
+
+    def match(self, cmd):
+        # The matcher `kind` is an anchor name; the parse dict uses `executable`
+        # for the exe anchor.
+        key = {"bundle": "bundle", "exe": "executable", "script": "script",
+               "module": "module", "asgi": "asgi"}[self.kind]
+        val = cmd.get(key) if cmd else None
+        return val is not None and self.pattern in val
+
+
+# `python*` / `pypy*` basename (case-insensitive), incl. the `Python.app` launcher
+# whose argv[0] ends in `.../Contents/MacOS/Python`.
+PYTHON_RE = re.compile(r"^(?:python|pypy)\d*(?:\.\d+)?$", re.IGNORECASE)
+
+
+def app_bundle_name(path):
+    """Bundle name (no `.app`) when `path` (argv[0]) is an app executable."""
+    m = re.search(r"/([^/]+\.app)/Contents/MacOS/", path or "")
+    return m.group(1)[:-4] if m else None
+
+
+def _is_python(name):
+    return bool(name) and bool(PYTHON_RE.match(name))
+
+
+def parse_command(argv, exec_path=None):
+    """Anchor a ps command to its entrypoint.
+
+    `exec_path` is the executable path — the ps `comm=` field, which is argv[0],
+    and carries an app bundle's spaces intact. When unknown it falls back to the
+    first whitespace token (fine for the no-space interpreter/binary paths).
+
+    Matching uses only the returned anchored fields, so argument text that merely
+    mentions a name can never classify a process. For a python interpreter (a
+    `python*` basename, incl. the `Python.app` launcher) the fields are
+    script/module/asgi; for a native binary/app they are bundle/executable.
+    """
+    if not argv:
+        return None
+    exe_path = exec_path or argv.split(None, 1)[0]
+    executable = os.path.basename(exe_path) if exe_path else None
+    is_python = _is_python(executable)
+    tokens = argv.split()
+    rest = tokens[1:] if len(tokens) > 1 else []
+    bundle = script = module = asgi = None
+    if is_python:
+        if len(rest) >= 2 and rest[0] == "-m":
+            if rest[1] == "uvicorn" and len(rest) >= 3:
+                asgi = rest[2]          # `-m uvicorn mlx_vlm.server:app`
+            else:
+                module = rest[1]
+        elif len(rest) >= 1 and not rest[0].startswith("-"):
+            script = rest[0]
+    else:
+        bundle = app_bundle_name(exe_path)
+        if executable and executable.lower() == "uvicorn":
+            asgi = rest[0] if rest else None   # `uvicorn mlx_vlm.server:app`
+    return {"python": is_python, "bundle": bundle, "executable": executable,
+            "script": script, "module": module, "asgi": asgi}
+
+
+SERVICE_MATCHERS = (
+    # Anchored to the entrypoint, never to arbitrary argv text.
+    Matcher("local-models-vision-server", "local-models", "asgi", "mlx_vlm.server"),
+    Matcher("local-models-vision-server", "local-models", "module", "mlx_vlm.server"),
+    Matcher("local-models-daemon", "local-models", "script", "local-models/server/serve.py"),
+    Matcher("local-models-bar", "local-models", "exe", "LocalModelsBar"),
+    Matcher("pocket-tts", "voice", "exe", "pocket-tts"),
+    Matcher("pocket-tts", "voice", "module", "pocket_tts"),
+    Matcher("local-tts", "voice", "exe", "local-tts"),
+    Matcher("local-tts", "voice", "script", "/.local/bin/local-tts"),
+    Matcher("screenctx", "screen", "exe", "screenctx"),
+    Matcher("dictation", "dictation", "bundle", "Local Dictation"),
+    Matcher("cotype", "cotype", "bundle", "Cotype"),
+    Matcher("quick-launch", "quick-launch", "bundle", "Quick Launch"),
+    Matcher("rti", "rti", "bundle", "RTI"),
+    Matcher("memory", "memory", "bundle", "Memory"),
+    Matcher("usage", "usage", "bundle", "Usage"),
+)
+
+
+def match_service(argv, exec_path=None, matchers=SERVICE_MATCHERS):
+    cmd = parse_command(argv, exec_path)
+    if cmd is None:
+        return None
+    for m in matchers:
+        if m.match(cmd):
+            return m
+    return None
+
+
+def exe_basename(argv, exec_path=None):
+    """Best-effort safe executable name from a full argv string.
+
+    Prefers the executable path (argv[0]) when known; app bundles keep the name
+    under `.app/Contents/MacOS/` and may contain spaces, so we must not split
+    argv on whitespace. Without an exec_path we anchor the `.app` match to the
+    string and otherwise take the first whitespace-separated token.
+    """
+    if not argv and not exec_path:
+        return None
+    if exec_path:
+        return os.path.basename(exec_path)
+    m = re.search(r"/([^/]+\.app)/Contents/MacOS/", argv)
+    if m:
+        return m.group(1)[:-4]  # drop the ".app" suffix
+    head = argv.split(None, 1)[0]
+    return os.path.basename(head)
+
+
+def process_closure(processes, roots):
+    """The root pids plus all their descendants (by ppid) in a sample."""
+    roots = {int(r) for r in roots}
+    children = defaultdict(list)
+    for p in processes:
+        children[p["ppid"]].append(p["pid"])
+    out = set()
+    stack = list(roots)
+    while stack:
+        pid = stack.pop()
+        if pid in out:
+            continue
+        out.add(pid)
+        stack.extend(children.get(pid, ()))
+    return out
+
+
+def classify(processes, matchers=SERVICE_MATCHERS, exclude_pids=()):
+    """Tag each process row in place with a safe service label.
+
+    A process is a fleet member if its anchored entrypoint matches a matcher, or
+    if it descends (via ppid chains) from a matched process. `exclude_pids` (the
+    tool's own pid) and all their descendants are dropped, so a snapshot never
+    records itself or the transient commands it spawns. Full argv is consumed
+    here and never appears on the returned records.
+    """
+    matched = {}  # pid -> (label, group)
+    for p in processes:
+        m = match_service(p["argv"], p.get("exec_path"), matchers)
+        if m is not None:
+            p["service"] = m.label
+            p["group"] = m.group
+            p["relationship"] = "matched"
+            p["child_of"] = None
+            matched[p["pid"]] = (m.label, m.group)
+        else:
+            p["service"] = None
+
+    pid_to_ppid = {p["pid"]: p["ppid"] for p in processes}
+    cache = {}
+
+    def nearest_matched(pid, depth=0):
+        if pid in matched:
+            return pid
+        if depth >= MAX_ANCESTRY_DEPTH or pid not in pid_to_ppid:
+            return None
+        if pid in cache:
+            return cache[pid]
+        parent = pid_to_ppid[pid]
+        if parent in (0, pid):
+            cache[pid] = None
+            return None
+        cache[pid] = nearest_matched(parent, depth + 1)
+        return cache[pid]
+
+    for p in processes:
+        if p["service"] is not None:
+            continue
+        ancestor = nearest_matched(p["pid"])
+        if ancestor is None:
+            continue
+        label, group = matched[ancestor]
+        p["service"] = label
+        p["group"] = group
+        p["relationship"] = "descendant"
+        p["child_of"] = ancestor
+
+    if exclude_pids:
+        excluded = process_closure(processes, exclude_pids)
+        for p in processes:
+            if p["pid"] in excluded:
+                p["service"] = None
+    return processes
+
+
+def parse_ps(text, returncode=0):
+    """Parse `ps -o pid,ppid,rss,time,command` output into row dicts."""
+    if returncode != 0:
+        return []
+    rows = []
+    for line in text.splitlines():
+        parts = line.split(None, 4)
+        if len(parts) != 5:
+            continue  # skipped kernel-thread columns / blank
+        pid, ppid, rss, cpu_raw, argv = parts
+        try:
+            row = {
+                "pid": int(pid),
+                "ppid": int(ppid),
+                "rss_kib": int(rss),
+                "cpu_time": parse_cpu_time(cpu_raw),
+                "argv": argv,
+            }
+        except (ValueError, IndexError):
+            continue
+        rows.append(row)
+    return rows
+
+
+def parse_exec(text, returncode=0):
+    """Parse `ps -o pid,comm` output: pid -> executable path (argv[0])."""
+    out = {}
+    if returncode != 0:
+        return out
+    for line in text.splitlines():
+        parts = line.split(None, 1)
+        if len(parts) != 2:
+            continue
+        pid, exe = parts
+        try:
+            out[int(pid)] = exe
+        except ValueError:
+            continue
+    return out
+
+
+def record_for_output(row):
+    """Safe label set for a tracked process — never carries the raw argv."""
+    return {
+        "pid": row["pid"],
+        "ppid": row["ppid"],
+        "service": row["service"],
+        "group": row["group"],
+        "executable": exe_basename(row["argv"], row.get("exec_path")),
+        "relationship": row["relationship"],
+        "child_of": row["child_of"],
+        "rss_kib": row["rss_kib"],
+        "cpu_time": row["cpu_time"],
+    }
+
+
+# --------------------------------------------------------------------------
+# Summary
+
+
+def build_summary(snapshots):
+    """Collapse per-sample records into a per-process summary.
+
+    CPU is a cumulative time delta over the process's own observed window (its
+    first to last sample), not over the whole run — so late joiners and early
+    exits measure correctly. Percent is of one core.
+    """
+    per_pid = {}
+    for snap in snapshots:
+        idx = snap["index"]
+        elapsed = snap["elapsed"]
+        for rec in snap["processes"]:
+            per_pid.setdefault(rec["pid"], []).append((elapsed, idx, rec))
+
+    summary = []
+    for pid, entries in per_pid.items():
+        entries.sort(key=lambda e: e[0])
+        first_elapsed, first_idx, first = entries[0]
+        last_elapsed, last_idx, last = entries[-1]
+        delta = last["cpu_time"] - first["cpu_time"]
+        window = last_elapsed - first_elapsed
+        rss_kib = [e[2]["rss_kib"] for e in entries]
+        pct = (delta / window * 100.0) if window > 0 else None
+        summary.append({
+            "pid": pid,
+            "ppid": last["ppid"],
+            "service": last["service"],
+            "group": last["group"],
+            "executable": last["executable"],
+            "relationship": last["relationship"],
+            "child_of": last["child_of"],
+            "samples": len(entries),
+            "first_sample_index": first_idx,
+            "last_sample_index": last_idx,
+            "cpu_time_first": round(first["cpu_time"], 4),
+            "cpu_time_last": round(last["cpu_time"], 4),
+            "cpu_delta_seconds": round(delta, 4),
+            "cpu_percent_of_one_core": round(pct, 3) if pct is not None else None,
+            "observed_seconds": round(window, 3),
+            "rss_kib_median": round(statistics.median(rss_kib), 1),
+            "rss_kib_min": min(rss_kib),
+            "rss_kib_max": max(rss_kib),
+            "rss_mib_median": round(statistics.median(rss_kib) / 1024.0, 2),
+            "rss_mib_min": round(min(rss_kib) / 1024.0, 2),
+            "rss_mib_max": round(max(rss_kib) / 1024.0, 2),
+        })
+    summary.sort(key=lambda s: (s["group"], s["service"], s["pid"]))
+    return summary
+
+
+# --------------------------------------------------------------------------
+# footprint(1)
+
+
+def _as_mib(text):
+    """'976 KB' / '1.5 GB' -> MiB. Assumes KB=1024 bytes (macOS memory units)."""
+    text = text.strip()
+    m = re.match(r"([\d.]+)\s*([A-Za-z]+)?", text)
+    if not m:
+        return None
+    val = float(m.group(1))
+    unit = (m.group(2) or "").upper()
+    mult = {
+        "": 1, "B": 1, "K": 1024, "KB": 1024, "MB": 1024 ** 2, "GB": 1024 ** 3,
+        "TB": 1024 ** 4, "KIB": 1024, "MIB": 1024 ** 2, "GIB": 1024 ** 3,
+    }.get(unit, 1)
+    return val * mult / (1024.0 ** 2)
+
+
+def parse_footprint(text):
+    """Parse `footprint --noCategories` output.
+
+    Returns (phys_footprint_mib, phys_footprint_peak_mib, header_footprint_mib).
+    phys_footprint is the authoritative physical-memory number.
+    """
+    phys = peak = head = None
+    m = re.search(r"phys_footprint:\s*([\d.]+\s*[A-Za-z]+)", text)
+    if m:
+        phys = _as_mib(m.group(1))
+    m = re.search(r"phys_footprint_peak:\s*([\d.]+\s*[A-Za-z]+)", text)
+    if m:
+        peak = _as_mib(m.group(1))
+    m = re.search(r"Footprint:\s*([\d.]+\s*[A-Za-z]+)", text)
+    if m:
+        head = _as_mib(m.group(1))
+    return phys, peak, head
+
+
+def run_footprint(summary, runner, timeout):
+    out = []
+    for s in sorted(summary, key=lambda s: s["pid"]):
+        try:
+            r = runner([FOOTPRINT_BIN, "--noCategories", str(s["pid"])], timeout=timeout)
+        except Exception as exc:  # timeout or spawn failure — bounded, keep going
+            out.append({"pid": s["pid"], "service": s["service"],
+                        "phys_footprint_mib": None, "error": f"{type(exc).__name__}"})
+            continue
+        if r.returncode != 0 or not r.stdout.strip():
+            out.append({"pid": s["pid"], "service": s["service"],
+                        "phys_footprint_mib": None, "error": "unavailable"})
+            continue
+        phys, peak, head = parse_footprint(r.stdout)
+        out.append({"pid": s["pid"], "service": s["service"],
+                    "phys_footprint_mib": phys,
+                    "phys_footprint_peak_mib": peak,
+                    "header_footprint_mib": head})
+    return out
+
+
+# --------------------------------------------------------------------------
+# Environment + git provenance
+
+
+def _sysctl(runner, name):
+    r = runner(["sysctl", "-n", name], timeout=5)
+    return r.stdout.strip() if r.returncode == 0 else None
+
+
+def _int_or_none(value):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def env_info(runner):
+    """Chip/core/memory/OS facts. Deliberately excludes UUID/serial/hostname."""
+    env = {}
+    sw = runner(["sw_vers"], timeout=5)
+    if sw.returncode == 0:
+        kv = {}
+        for line in sw.stdout.splitlines():
+            k, _, v = line.partition(":")
+            kv[k.strip()] = v.strip()
+        env["os_name"] = kv.get("ProductName")
+        env["os_version"] = kv.get("ProductVersion")
+        env["os_build"] = kv.get("BuildVersion")
+    un = runner(["uname", "-r"], timeout=5)
+    env["kernel_release"] = un.stdout.strip() if un.returncode == 0 else platform.release()
+
+    env["chip"] = _sysctl(runner, "machdep.cpu.brand_string") or platform.processor() or None
+    env["cpu_physical_cores"] = _int_or_none(_sysctl(runner, "hw.physicalcpu"))
+    env["cpu_logical_cores"] = _int_or_none(_sysctl(runner, "hw.logicalcpu"))
+    env["performance_cores"] = _int_or_none(_sysctl(runner, "hw.perflevel0.physicalcpu"))
+    env["efficiency_cores"] = _int_or_none(_sysctl(runner, "hw.perflevel1.physicalcpu"))
+    mem = _int_or_none(_sysctl(runner, "hw.memsize"))
+    env["memory_bytes"] = mem
+    env["memory_mib"] = round(mem / (1024.0 ** 2), 1) if mem else None
+    env["platform_system"] = platform.system()
+    env["platform_arch"] = platform.machine()
+    return env
+
+
+def _normalize_home(path):
+    """Replace a leading real home directory with `~` so usernames never persist."""
+    home = str(Path.home())
+    if path == home:
+        return "~"
+    if path.startswith(home + os.sep):
+        return "~" + path[len(home):]
+    return path
+
+
+def git_info(repos, runner):
+    """Record each repo's HEAD revision and dirty/untracked relative paths.
+
+    The emitted path is normalized so a leading real home directory becomes `~`;
+    a username never reaches the JSON.
+    """
+    out = []
+    for repo in repos:
+        root = str(Path(repo).resolve())
+        head = runner(["git", "-C", root, "rev-parse", "--short", "HEAD"], timeout=10)
+        if head.returncode != 0:
+            out.append({"path": _normalize_home(root), "revision": None,
+                        "head_dirty": None, "dirty_paths": None})
+            continue
+        status = runner(["git", "-C", root, "status", "--porcelain"], timeout=10)
+        dirty = []
+        if status.returncode == 0:
+            for line in status.stdout.splitlines():
+                if not line.strip():
+                    continue
+                dirty.append(line[3:])  # strip the two status chars + one space
+        out.append({"path": _normalize_home(root), "revision": head.stdout.strip(),
+                    "head_dirty": bool(dirty), "dirty_paths": dirty})
+    return out
+
+
+# --------------------------------------------------------------------------
+# Snapshot assembly
+
+
+def limitations(config):
+    lines = [
+        "RSS is resident set size in KiB (ps rss), not physical footprint; shared/model pages may be counted more than once.",
+        "CPU is cumulative process-time delta (ps time=) over the process's observed window, not the instantaneous %CPU ps reports.",
+        "cpu-time resolution is 0.01 s; no wakeups and no per-thread/energy measurement.",
+        "This is a live observation of the running fleet, not a controlled idle lab test; other processes and builds may contend.",
+        "A process that starts or stops during sampling is measured only over its observed window.",
+        "footprint(1) is a single reading per process, not a leak test.",
+        "Read-only contract: no root, no process restarts/signals, no network, no screenshots, no screen/private captures.",
+        "Service discovery uses full argv in memory only; the JSON carries safe labels (pid, ppid, executable basename, service name), never a raw command line.",
+        "platform/git info records chip/core/memory/OS and repo revision + dirty paths; no hardware UUID, serial, or hostname.",
+    ]
+    if not config["footprint"]:
+        lines.append("footprint(1) not run (enable with --footprint).")
+    return lines
+
+
+def snapshot_fleet(config, runner):
+    samples = int(config["samples"])
+    if samples < 1:
+        raise ValueError(f"samples must be >= 1 (got {samples})")
+    interval = float(config["interval"])
+    start = mono_clock()
+    self_pid = os.getpid()
+    snapshots = []
+    matched = set()
+
+    for i in range(samples):
+        ts = datetime.datetime.now().astimezone().isoformat(timespec="seconds")
+        elapsed = mono_clock() - start
+        r = runner(PS_ARGV)
+        rows = parse_ps(r.stdout if hasattr(r, "stdout") else "", getattr(r, "returncode", 0))
+        re_cmd = runner(PS_EXEC)
+        exec_map = parse_exec(re_cmd.stdout if hasattr(re_cmd, "stdout") else "",
+                              getattr(re_cmd, "returncode", 0))
+        for row in rows:
+            row["exec_path"] = exec_map.get(row["pid"])
+        classify(rows, exclude_pids=[self_pid])
+        tracked = [record_for_output(p) for p in rows if p["service"]]
+        for rec in tracked:
+            matched.add(rec["service"])
+        snapshots.append({"index": i, "ts": ts, "elapsed": round(elapsed, 4),
+                          "processes": tracked})
+        if i < samples - 1 and interval > 0:
+            sleep(interval)
+
+    summary = build_summary(snapshots)
+    footprint = None
+    if config["footprint"]:
+        footprint = run_footprint(summary, runner, float(config["footprint_timeout"]))
+
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "tool": {"name": TOOL_NAME, "version": TOOL_VERSION},
+        "generated_at": datetime.datetime.now().astimezone().isoformat(timespec="seconds"),
+        "config": {
+            "samples": samples,
+            "interval": interval,
+            "duration": float(config["duration"]),
+            "footprint": bool(config["footprint"]),
+            "footprint_timeout": float(config["footprint_timeout"]),
+            "no_raw": bool(config["no_raw"]),
+        },
+        "environment": env_info(runner),
+        "git_repositories": git_info(config["git_repos"], runner),
+        "sampling": {
+            "ps_command": " ".join(PS_ARGV),
+            "ps_exec_command": " ".join(PS_EXEC),
+            "matched_services": sorted(matched),
+            "sample_count": samples,
+            "wall_elapsed_seconds": round(mono_clock() - start, 3),
+        },
+        "samples": [] if config["no_raw"] else snapshots,
+        "processes": summary,
+        "footprint": footprint,
+        "limitations": limitations(config),
+    }
+
+
+def write_snapshot(snapshot, output_dir, output_name):
+    out_dir = Path(output_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    path = out_dir / f"{output_name}.json"
+    path.write_text(json.dumps(snapshot, indent=2, ensure_ascii=False) + "\n")
+    return path
+
+
+# --------------------------------------------------------------------------
+# Terminal output (house surface: flat, monochrome, no banners)
+
+
+def render(snapshot, out, path):
+    print(f"fleet snapshot -> {path}", file=out)
+    proc = snapshot["processes"]
+    if not proc:
+        print("  (no fleet processes matched)", file=out)
+        return
+    fp = {p["pid"]: p for p in (snapshot["footprint"] or [])}
+    rows = []
+    for p in proc:
+        pct = p["cpu_percent_of_one_core"]
+        pct_s = f"{pct:.3f}" if pct is not None else "   n/a"
+        rss = p["rss_mib_median"]
+        fpv = fp.get(p["pid"], {}).get("phys_footprint_mib")
+        fp_s = f"{fpv:.1f}" if fpv is not None else "   n/a"
+        rows.append((p["service"], f"{p['pid']:<7} child_of={p['child_of'] or '-'}" if p["relationship"] == "descendant" else f"{p['pid']:<7}",
+                     pct_s, f"{rss:>8.2f}", f"{fp_s:>8}"))
+    w = max(len(r[0]) for r in rows)
+    print(f"  {'service'.ljust(w)}  pid      cpu%1core  rssMiB  footprintMiB", file=out)
+    for service, ident, pct, rss, fpv in rows:
+        print(f"  {service.ljust(w)}  {ident}  {pct:>8}  {rss:>8}  {fpv:>8}", file=out)
+
+
+# --------------------------------------------------------------------------
+# Config
+
+
+def resolve_config(args):
+    interval = float(args.interval)
+    if args.samples is not None:
+        samples = int(args.samples)
+    elif interval > 0:
+        samples = max(2, int(round(float(args.duration) / interval)) + 1)
+    else:
+        samples = 2
+    repos = [str(Path(__file__).resolve().parent.parent)]
+    if args.git_repo:
+        repos.extend(args.git_repo)
+    seen = set()
+    repos = [r for r in repos if not (r in seen or seen.add(r))]
+    return {
+        "samples": samples,
+        "interval": interval,
+        "duration": float(args.duration),
+        "footprint": bool(args.footprint and not args.no_footprint),
+        "footprint_timeout": float(args.footprint_timeout),
+        "git_repos": repos,
+        "no_raw": bool(args.no_raw),
+    }
+
+
+def build_arg_parser():
+    ap = argparse.ArgumentParser(
+        prog=TOOL_NAME,
+        description=__doc__.split("\n")[0],
+    )
+    ap.add_argument("--duration", type=float, default=60.0,
+                    help="nominal sampling wall duration in seconds (default 60)")
+    ap.add_argument("--interval", type=float, default=2.0,
+                    help="seconds between samples (default 2)")
+    ap.add_argument("--samples", type=int, default=None,
+                    help="override the number of samples (default derived from duration/interval)")
+    ap.add_argument("--output-dir", default=".", help="directory for the JSON snapshot")
+    ap.add_argument("--output", default=None,
+                    help="output base name (default fleet-snapshot-<timestamp>)")
+    ap.add_argument("--footprint", action="store_true",
+                    help="also run footprint(1) for physical memory")
+    ap.add_argument("--no-footprint", action="store_true", help="skip footprint (default)")
+    ap.add_argument("--footprint-timeout", type=float, default=15.0,
+                    help="per-process footprint timeout in seconds (default 15)")
+    ap.add_argument("--git-repo", action="append", default=None,
+                    help="record git revision/dirty paths for this repo (repeatable)")
+    ap.add_argument("--json", action="store_true", help="print the full JSON snapshot to stdout")
+    ap.add_argument("--no-raw", action="store_true", help="omit per-sample raw records")
+    ap.add_argument("--list-services", action="store_true",
+                    help="print the known service matchers and exit")
+    return ap
+
+
+def main(argv=None):
+    ap = build_arg_parser()
+    args = ap.parse_args(argv)
+
+    if args.list_services:
+        for m in SERVICE_MATCHERS:
+            print(f"{m.label}\t{m.group}\t{m.kind}\t{m.pattern}")
+        return 0
+
+    if args.samples is not None and args.samples < 1:
+        print(f"{TOOL_NAME}: --samples must be >= 1 (got {args.samples})", file=sys.stderr)
+        return 2
+
+    if os.geteuid() == 0:
+        print(f"{TOOL_NAME}: refusing to run as root (read-only contract)", file=sys.stderr)
+        return 2
+
+    config = resolve_config(args)
+
+    out_dir = args.output_dir or "."
+    out_name = args.output or f"fleet-snapshot-{datetime.datetime.now().strftime('%Y%m%d-%H%M%S')}"
+    config["output_dir"] = out_dir
+    config["output_name"] = out_name
+
+    snapshot = snapshot_fleet(config, run_cmd)
+    path = write_snapshot(snapshot, out_dir, out_name)
+
+    if args.json:
+        print(json.dumps(snapshot, indent=2, ensure_ascii=False))
+    else:
+        render(snapshot, sys.stdout, path)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

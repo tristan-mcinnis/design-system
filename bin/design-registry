@@ -1,0 +1,301 @@
+#!/usr/bin/env python3
+"""design-registry - the house component registry.
+
+A surface that is not in `components.json` is a surface nobody agreed on. This
+lists what exists, adds a new one, renders the `Shared components` section of
+DESIGN.md, and checks that every registered path is still real and every house
+repo with a view layer implements something.
+
+    design-registry list
+    design-registry show menu-bar-panel
+    design-registry add --name "Toast" --purpose "..." \
+        --spec "28 high at Radius.sm" --implements cotype:Sources/X/Toast.swift
+    design-registry render        # print the DESIGN.md section
+    design-registry sync          # write it into DESIGN.md between the markers
+    design-registry check         # paths exist; every view repo is registered
+    design-registry check --allow-missing   # a sibling repo that is absent is skipped
+
+A missing sibling repo fails `check` by default. A standalone clone passes
+`--allow-missing` (or sets HOUSE_ALLOW_MISSING=1) to check only what is there.
+A sibling that is present but lacks a registered path still fails.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import re
+import sys
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+ROOT = HERE.parent
+HOUSE = ROOT.parent
+REGISTRY = ROOT / "components.json"
+DESIGN = ROOT / "DESIGN.md"
+
+BEGIN = "<!-- components:begin (generated from components.json: make components) -->"
+END = "<!-- components:end -->"
+SHARED = "Shared components"
+
+# Repos whose UI is a real view layer. A repo here with no registered component
+# is an unregistered surface, and `check` says so.
+VIEW_REPOS = {
+    "quick-launch": "Sources/Views",
+    "rti": "RTI/Sources/UI",
+    "local-dictation": "src/menubar",
+    "cotype": "Sources/CotypeMenuApp",
+    "memory-menubar": "Sources/MemoryBar",
+    "usage-menubar": "Sources/UsageBar",
+    "local-models": "menubar/LocalModelsBar/Sources/LocalModelsBar",
+    "memory-recall": "Sources/RecallCore",
+    "memory-screenctx": "Sources/ScreenctxCore",
+    "design-system": "icons",
+}
+
+DOT = "●"
+
+
+def allow_missing(args=None):
+    """True when absent sibling repos may be skipped (flag or HOUSE_ALLOW_MISSING)."""
+    if args is not None and getattr(args, "allow_missing", False):
+        return True
+    return os.environ.get("HOUSE_ALLOW_MISSING", "") not in ("", "0")
+
+
+def load():
+    return json.loads(REGISTRY.read_text())
+
+
+def save(data):
+    REGISTRY.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n")
+
+
+def slug(name):
+    return re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
+
+
+def find(data, key):
+    key = slug(key)
+    for c in data["components"]:
+        if c["key"] == key or slug(c["name"]) == key:
+            return c
+    return None
+
+
+def bullet(c):
+    head = f"- **{c['name']}**"
+    if c.get("qualifier"):
+        head += f" ({c['qualifier']})"
+    return f"{head}: {'; '.join(c['spec'])}."
+
+
+def render(data):
+    return "\n".join(bullet(c) for c in data["components"] if c.get("section") == SHARED)
+
+
+def sync(data):
+    """Replace the marked block in DESIGN.md. Returns True when it changed."""
+    text = DESIGN.read_text()
+    block = f"{BEGIN}\n{render(data)}\n{END}"
+    if BEGIN in text and END in text:
+        new = re.sub(re.escape(BEGIN) + r".*?" + re.escape(END), lambda _: block, text, flags=re.S)
+    else:  # first run: put the block under the `## Shared components` heading
+        new = re.sub(r"(## Shared components\n\n).*?(?=\n## )",
+                     lambda m: m.group(1) + block + "\n", text, count=1, flags=re.S)
+    if new == text:
+        return False
+    DESIGN.write_text(new)
+    return True
+
+
+# --------------------------------------------------------------------------
+
+
+def cmd_list(args):
+    data = load()
+    width = max(len(c["key"]) for c in data["components"])
+    print(f"{DOT} {len(data['components'])} components · {REGISTRY.name}")
+    print()
+    print("COMPONENTS")
+    for c in data["components"]:
+        repos = ", ".join(sorted({e["repo"] for e in c["implements"]}))
+        print(f"  {c['key']:<{width}}  {c['purpose']}")
+        print(f"  {'':<{width}}  {repos}")
+    return 0
+
+
+def cmd_show(args):
+    data = load()
+    c = find(data, args.component)
+    if not c:
+        print(f"{DOT} no component named {args.component!r}", file=sys.stderr)
+        return 1
+    print(f"{DOT} {c['name']}" + (f" ({c['qualifier']})" if c.get("qualifier") else ""))
+    print()
+    print("PURPOSE")
+    print(f"  {c['purpose']}")
+    print(f"  section   {c.get('section', SHARED)}")
+    print(f"  mockup    {c.get('mockup', '')}")
+    print()
+    print("SPEC")
+    for s in c["spec"]:
+        print(f"  {s}")
+    for label, key in (("IMPLEMENTS", "implements"), ("PROOF", "proof")):
+        entries = c.get(key, [])
+        if not entries:
+            continue
+        print()
+        print(label)
+        width = max(len(e["repo"]) for e in entries)
+        for e in entries:
+            exists = "" if (HOUSE / e["repo"] / e["path"]).exists() else "   MISSING"
+            print(f"  {e['repo']:<{width}}  {e['path']}{exists}")
+    return 0
+
+
+def parse_impl(spec, flag):
+    repo, sep, path = spec.partition(":")
+    if not sep or not repo or not path:
+        raise SystemExit(f"{flag} wants repo:path, got {spec!r}")
+    return {"repo": repo.strip(), "path": path.strip()}
+
+
+def cmd_add(args):
+    data = load()
+    key = slug(args.key or args.name)
+    if find(data, key):
+        print(f"{DOT} {key} is already registered; edit components.json or pick another name",
+              file=sys.stderr)
+        return 1
+    entry = {
+        "key": key,
+        "name": args.name,
+        "purpose": args.purpose,
+        "section": args.section,
+        "spec": list(args.spec),
+        "implements": [parse_impl(s, "--implements") for s in args.implements],
+        "mockup": args.mockup or data.get("mockup_project", ""),
+        "proof": [parse_impl(s, "--proof") for s in (args.proof or [])],
+    }
+    if args.qualifier:
+        entry["qualifier"] = args.qualifier
+    data["components"].append(entry)
+    save(data)
+    changed = sync(data) if entry["section"] == SHARED else False
+    print(f"{DOT} added {key} · {len(entry['implements'])} implements · "
+          f"{len(entry['proof'])} proof" + (" · DESIGN.md updated" if changed else ""))
+    if not entry["proof"]:
+        print("  no proof yet: a new surface needs an offscreen render proof before it ships")
+    return 0
+
+
+def cmd_render(args):
+    print(render(load()))
+    return 0
+
+
+def cmd_sync(args):
+    changed = sync(load())
+    print(f"{DOT} DESIGN.md " + ("updated" if changed else "already matches components.json"))
+    return 0
+
+
+def cmd_check(args):
+    data = load()
+    allow = allow_missing(args)
+    missing, unregistered, unproved, stale = [], [], [], []
+    absent_repos = set()
+    registered_repos = set()
+    for c in data["components"]:
+        registered_repos.update(e["repo"] for e in c["implements"])
+        for key in ("implements", "proof"):
+            for e in c.get(key, []):
+                if not (HOUSE / e["repo"]).is_dir():
+                    absent_repos.add(e["repo"])
+                    continue
+                if not (HOUSE / e["repo"] / e["path"]).exists():
+                    missing.append((c["key"], key, f"{e['repo']}:{e['path']}"))
+        if not c.get("proof"):
+            unproved.append(c["key"])
+    for repo, view_dir in sorted(VIEW_REPOS.items()):
+        if not (HOUSE / repo).is_dir():
+            continue
+        if not (HOUSE / repo / view_dir).is_dir():
+            # The repo is here but its view layer is gone (a retired app):
+            # the entry is stale, not an unregistered surface.
+            stale.append(f"{repo} ({view_dir})")
+            continue
+        if repo not in registered_repos:
+            unregistered.append(f"{repo} ({view_dir})")
+
+    text = DESIGN.read_text()
+    in_sync = BEGIN in text and render(data) in text
+    bad = bool(missing or unregistered or unproved or stale) or not in_sync \
+        or (bool(absent_repos) and not allow)
+    print(f"{DOT} registry {'drift' if bad else 'clean'} · {len(data['components'])} components "
+          f"· {len(registered_repos)} repos")
+    if allow and absent_repos:
+        print(f"  skipped {len(absent_repos)} absent sibling repos (--allow-missing): "
+              + ", ".join(sorted(absent_repos)))
+    if absent_repos and not allow:
+        print("\nABSENT SIBLING REPOS (clone them next to design-system, or run with "
+              "--allow-missing / HOUSE_ALLOW_MISSING=1 for a standalone check)")
+        print("  folder names, not GitHub names: rti-personal is the folder rti, "
+              "memory-ledger is the folder ledger")
+    if missing:
+        print("\nMISSING PATHS")
+        for key, kind, path in missing:
+            print(f"  {key:<16}  {kind:<11}{path}")
+    if unregistered:
+        print("\nUNREGISTERED SURFACES")
+        for line in unregistered:
+            print(f"  {line}")
+    if stale:
+        print("\nSTALE VIEW REPOS (view layer gone; drop it from VIEW_REPOS)")
+        for line in stale:
+            print(f"  {line}")
+    if unproved:
+        print("\nNO RENDER PROOF")
+        for key in unproved:
+            print(f"  {key}")
+    if not in_sync:
+        print("\nDESIGN.MD")
+        print("  the Shared components section does not match components.json: make components")
+    return 1 if bad else 0
+
+
+def main(argv=None):
+    ap = argparse.ArgumentParser(prog="design-registry", description=__doc__.split("\n")[0])
+    sub = ap.add_subparsers(dest="cmd", required=True)
+
+    sub.add_parser("list", help="one row per component").set_defaults(fn=cmd_list)
+    s = sub.add_parser("show", help="the full entry")
+    s.add_argument("component")
+    s.set_defaults(fn=cmd_show)
+
+    s = sub.add_parser("add", help="register a new component")
+    s.add_argument("--name", required=True)
+    s.add_argument("--purpose", required=True)
+    s.add_argument("--spec", action="append", required=True, help="one clause; repeatable")
+    s.add_argument("--implements", action="append", required=True, metavar="REPO:PATH")
+    s.add_argument("--proof", action="append", metavar="REPO:PATH")
+    s.add_argument("--qualifier", help="the apps in brackets after the name")
+    s.add_argument("--section", default=SHARED)
+    s.add_argument("--key")
+    s.add_argument("--mockup")
+    s.set_defaults(fn=cmd_add)
+
+    sub.add_parser("render", help="print the DESIGN.md section").set_defaults(fn=cmd_render)
+    sub.add_parser("sync", help="write the section into DESIGN.md").set_defaults(fn=cmd_sync)
+    s = sub.add_parser("check", help="paths exist, repos registered, DESIGN.md in sync")
+    s.add_argument("--allow-missing", action="store_true",
+                   help="skip sibling repos that are not cloned (standalone checkout)")
+    s.set_defaults(fn=cmd_check)
+
+    args = ap.parse_args(argv)
+    return args.fn(args)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

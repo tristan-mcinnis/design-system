@@ -1,0 +1,26 @@
+{
+  "source_commit": "f116261a6f4e1997697b941bac4603362a7d65be",
+  "duplicate_removed_pids": [
+    1476,
+    2021,
+    6460
+  ],
+  "preserved_vision_pid": 1175,
+  "backends": {
+    "mlx-vlm": {
+      "available": true,
+      "model_loaded": true
+    },
+    "llama-gguf": {
+      "available": true,
+      "model_loaded": true
+    },
+    "mlx-audio-stt": {
+      "available": false,
+      "model_loaded": false
+    }
+  },
+  "completion_warm_state_restored": true,
+  "port_8080_listener": "127.0.0.1 only",
+  "note": "Duplicate tree footprint before removal831MB; not a claim of equal system-wide free-memory change."
+}

@@ -1,0 +1,701 @@
+{
+  "_": "The house component registry. One entry per shared surface. `make components` renders the `Shared components` section of DESIGN.md from the entries whose section is `Shared components`; `bin/design-registry check` verifies every `implements` and `proof` path still exists. Add a component before you build a new surface: bin/design-registry add --name ... --purpose ... --spec ... --implements repo:path",
+  "mockup_project": "Modernize HouseDesign system (direction 1b, Slate)",
+  "components": [
+    {
+      "key": "launcher-panel",
+      "name": "Launcher panel",
+      "purpose": "The floating command surface: type, see ranked rows, act with a key.",
+      "section": "Shared components",
+      "spec": [
+        "`input` row 58 high with a leading search glyph and one 28 px square menu",
+        "section labels in `section`",
+        "rows 40 high with a tile, `label` title, `meta` detail, and either key caps or a `meta` type label on the right",
+        "footer 40 high painted as a `well`, status dot + context on the left, primary key and ⌘K on the right"
+      ],
+      "implements": [
+        {
+          "repo": "quick-launch",
+          "path": "Sources/Views/OverlayView.swift"
+        },
+        {
+          "repo": "rti",
+          "path": "RTI/Sources/UI/CommandPalette/CommandPaletteView.swift"
+        }
+      ],
+      "mockup": "Modernize HouseDesign system (direction 1b, Slate)",
+      "proof": [
+        {
+          "repo": "quick-launch",
+          "path": "Tests/OverlayRenderProofTests.swift"
+        },
+        {
+          "repo": "rti",
+          "path": "RTI/RenderTests/SlateRenderProofTests.swift"
+        }
+      ]
+    },
+    {
+      "key": "composer",
+      "name": "Composer",
+      "qualifier": "Quick Launch and RTI",
+      "purpose": "The shared chat entry pattern: attach, write, act, and open commands.",
+      "section": "Shared components",
+      "spec": [
+        "a pill-shaped field on a quiet stroke, beginning at `Control.pill` height and growing within a bounded line limit before scrolling",
+        "a leading plus circle and trailing command circle at `Control.pill`, using the same glyph, stroke, hover and focus roles",
+        "a real primary-action button inside the field; Return sends, Shift-Return inserts a line, `⇧⌘A` attaches, and `⌘K` opens searchable actions",
+        "attachment readiness and failures remain visible above the field; floating choices fit in the remaining space and keyboard selection scrolls into view",
+        "`@` and `+` open searchable context choices; `/new` clears draft and pending sources without deleting saved history or ending a recording",
+        "the context choices name how far the search reaches, so source-only versus broader retrieval stays reachable before Send; the effective image destination remains visible above the field; completed answers expose their model and used context",
+        "empty Return keeps the app's explicitly labelled delivery or quick action; IME composition and active choices take precedence"
+      ],
+      "implements": [
+        {
+          "repo": "rti",
+          "path": "RTI/Sources/UI/HouseChat/HouseComposer.swift"
+        },
+        {
+          "repo": "quick-launch",
+          "path": "Sources/Views/QuickAIComposer.swift"
+        }
+      ],
+      "mockup": "Modernize HouseDesign system (direction 1b, Slate)",
+      "proof": [
+        {
+          "repo": "rti",
+          "path": "RTI/RenderTests/ComposerRenderProofTests.swift"
+        },
+        {
+          "repo": "quick-launch",
+          "path": "Tests/LongComposerTests.swift"
+        }
+      ]
+    },
+    {
+      "key": "hidden-launcher-items",
+      "name": "Hidden launcher items",
+      "qualifier": "Quick Launch",
+      "purpose": "Review and restore results hidden from discovery without deleting their sources.",
+      "section": "Shared components",
+      "spec": [
+        "Settings Items has a searchable Hidden view using the existing settings table and type filters",
+        "each row names the item and kind, marks unavailable sources, and offers Restore; Restore All is explicit",
+        "Hide from Quick Launch is distinct from Hide Windows; hidden items keep aliases, pins and hotkeys"
+      ],
+      "implements": [
+        {
+          "repo": "quick-launch",
+          "path": "Sources/Views/ItemsSettingsView.swift"
+        }
+      ],
+      "proof": [
+        {
+          "repo": "quick-launch",
+          "path": "Tests/LauncherHiddenItemsTests.swift"
+        }
+      ],
+      "mockup": "Native behaviour proof: quick-launch/Tests/LauncherHiddenItemsTests.swift; no external mockup on record"
+    },
+    {
+      "key": "chat-context-record",
+      "name": "Chat context record",
+      "qualifier": "Quick Launch and RTI",
+      "purpose": "Inspect what a retained answer used and whether its attachments can be reopened.",
+      "section": "Shared components",
+      "spec": [
+        "a compact answer detail exposes effective model, provider destination, reasoning, used sources and phase timings",
+        "attachment rows distinguish retained, partial and unavailable content; refresh creates a new source version",
+        "history actions distinguish new chat, removal of pending context and confirmed deletion of saved records"
+      ],
+      "implements": [
+        {
+          "repo": "quick-launch",
+          "path": "Sources/Views/AIChatWindowView.swift"
+        },
+        {
+          "repo": "rti",
+          "path": "RTI/Sources/UI/SessionsControl/SessionsBrowserView.swift"
+        }
+      ],
+      "proof": [
+        {
+          "repo": "quick-launch",
+          "path": "Tests/ChatContextRenderProofTests.swift"
+        },
+        {
+          "repo": "rti",
+          "path": "RTI/RenderTests/ChatLibraryRenderProofTests.swift"
+        }
+      ],
+      "mockup": "Native render proof: quick-launch/Tests/ChatContextRenderProofTests.swift; RTI/RenderTests/ChatLibraryRenderProofTests.swift"
+    },
+    {
+      "key": "settings-shell",
+      "name": "Settings shell",
+      "purpose": "The rail-and-panes window every app uses for its preferences.",
+      "section": "Shared components",
+      "spec": [
+        "220 px rail on `surfaceSunken` with 36 px rows, the selected row a raised tile",
+        "pane title in `title` with a `meta` subtitle",
+        "groups as cards at `Radius.lg` with an uppercase `section` label and 40 px rows",
+        "ink toggles",
+        "footer well with the hint on the left and the primary key on the right"
+      ],
+      "implements": [
+        {
+          "repo": "quick-launch",
+          "path": "Sources/Views/SettingsView.swift"
+        },
+        {
+          "repo": "rti",
+          "path": "RTI/Sources/Settings/SettingsView.swift"
+        },
+        {
+          "repo": "cotype",
+          "path": "Sources/CotypeMenuApp/SettingsView.swift"
+        },
+        {
+          "repo": "memory-menubar",
+          "path": "Sources/MemoryBar/SettingsView.swift"
+        },
+        {
+          "repo": "local-dictation",
+          "path": "src/settings_window.rs"
+        }
+      ],
+      "mockup": "Modernize HouseDesign system (direction 1b, Slate)",
+      "proof": [
+        {
+          "repo": "quick-launch",
+          "path": "Tests/DarkModeRenderProofTests.swift"
+        },
+        {
+          "repo": "cotype",
+          "path": "Sources/CotypeMenuApp/RenderProof.swift"
+        },
+        {
+          "repo": "memory-menubar",
+          "path": "Sources/MemoryBar/RenderProof.swift"
+        },
+        {
+          "repo": "local-dictation",
+          "path": "src/menubar/render_ui.rs"
+        }
+      ]
+    },
+    {
+      "key": "pill",
+      "name": "Pill",
+      "qualifier": "Local Dictation",
+      "purpose": "The floating recording, processing, and completion feedback for Local Dictation.",
+      "section": "Shared components",
+      "spec": [
+        "compact height is `Control.pill - Spacing.xxs` (32), standard height is `Control.pill` (36), with radius equal to half the height and the shared panel glass",
+        "a danger recording dot becomes a cancel glyph on hover inside a stable hit target; Escape and click cancel before insertion begins, without activating the pill",
+        "the ink waveform rests near-flat in silence and responds to microphone levels; sensitivity is adjustable without changing recorded audio",
+        "optional live transcript text uses the existing sentence-based transcription stream; processing shows Transcribing, Cleaning up when used, and Pasting at insertion, without artificial stage delays",
+        "processing details, size, live preview, waveform response, and completion feedback are exposed in Settings; Reduce Motion disables decorative movement",
+        "success, copied recovery, held text, and errors state their outcome with words and the existing status tokens"
+      ],
+      "implements": [
+        {
+          "repo": "local-dictation",
+          "path": "src/menubar/pill.rs"
+        }
+      ],
+      "mockup": "Modernize HouseDesign system (direction 1b, Slate)",
+      "proof": [
+        {
+          "repo": "local-dictation",
+          "path": "src/menubar/render_ui.rs"
+        }
+      ]
+    },
+    {
+      "key": "chips",
+      "name": "Chips",
+      "purpose": "A small stateful token in a row: a mode, a filter, a recording clock.",
+      "section": "Shared components",
+      "spec": [
+        "28 high at `Radius.sm`, `chipFill`, `meta` text",
+        "recording is the only chroma, a `danger` dot + clock"
+      ],
+      "implements": [
+        {
+          "repo": "quick-launch",
+          "path": "Sources/Views/SlateChrome.swift"
+        },
+        {
+          "repo": "rti",
+          "path": "RTI/Sources/UI/Overlay/OverlayTheme.swift"
+        },
+        {
+          "repo": "cotype",
+          "path": "Sources/CotypeMenuApp/HouseUI.swift"
+        },
+        {
+          "repo": "memory-menubar",
+          "path": "Sources/MemoryBar/HouseUI.swift"
+        }
+      ],
+      "mockup": "Modernize HouseDesign system (direction 1b, Slate)",
+      "proof": [
+        {
+          "repo": "quick-launch",
+          "path": "Tests/OverlayRenderProofTests.swift"
+        },
+        {
+          "repo": "cotype",
+          "path": "Sources/CotypeMenuApp/RenderProof.swift"
+        },
+        {
+          "repo": "memory-menubar",
+          "path": "Sources/MemoryBar/RenderProof.swift"
+        }
+      ]
+    },
+    {
+      "key": "menu-bar-panel",
+      "name": "Menu bar panel",
+      "qualifier": "Cotype, Memory, Local Models, Usage",
+      "purpose": "A glass panel in place of an NSMenu, hung off the status item.",
+      "section": "Shared components",
+      "spec": [
+        "a 300 px glass panel in place of an NSMenu",
+        "header of a 26 px icon tile, app name in `label`, a status line in `caption` with a 6 px dot, and an ink toggle for the one master switch",
+        "`divider`",
+        "action rows 36 high with a glyph, `label` text, and outlined key caps, selection = `selectionFill` + `selectionRing`",
+        "rows may carry two lines (a `label` id over `meta` detail) with a 26 px icon tile, as Local Models' model rows do",
+        "a second group for rarer actions",
+        "footer well 36 high, Settings ⌘, on the left, Quit ⌘Q on the right",
+        "arrows, Return, and Escape drive it, and it closes on focus loss"
+      ],
+      "implements": [
+        {
+          "repo": "cotype",
+          "path": "Sources/CotypeMenuApp/MenuBarPanel.swift"
+        },
+        {
+          "repo": "memory-menubar",
+          "path": "Sources/MemoryBar/MenuBarPanel.swift"
+        },
+        {
+          "repo": "local-models",
+          "path": "menubar/LocalModelsBar/Sources/LocalModelsBar/MenuBarPanel.swift"
+        },
+        {
+          "repo": "usage-menubar",
+          "path": "Sources/UsageBar/MenuBarPanel.swift"
+        },
+        {
+          "repo": "design-system",
+          "path": "kit/MenuBarPanel.swift"
+        }
+      ],
+      "mockup": "Modernize HouseDesign system (direction 1b, Slate)",
+      "proof": [
+        {
+          "repo": "cotype",
+          "path": "Sources/CotypeMenuApp/RenderProof.swift"
+        },
+        {
+          "repo": "memory-menubar",
+          "path": "Sources/MemoryBar/RenderProof.swift"
+        },
+        {
+          "repo": "local-models",
+          "path": "menubar/LocalModelsBar/Sources/LocalModelsBar/RenderProof.swift"
+        },
+        {
+          "repo": "usage-menubar",
+          "path": "Sources/UsageBar/RenderProof.swift"
+        }
+      ]
+    },
+    {
+      "key": "terminal",
+      "name": "Terminal",
+      "qualifier": "recall, screenctx, any house CLI",
+      "purpose": "The text form of the house rule: status line, uppercase sections, two-column rows.",
+      "section": "Terminal surfaces",
+      "spec": [
+        "monochrome, no ANSI colour except the status dot, and honour `NO_COLOR` and a non-TTY",
+        "uppercase section labels, `TODAY`, `OPEN TASKS`, `STORE`",
+        "rows read like launcher rows, a title then secondary detail aligned in two columns",
+        "one-line status first, `● Ready · 1,204 frames · 63 MB`",
+        "no banners, no boxes, no emoji"
+      ],
+      "implements": [
+        {
+          "repo": "memory-recall",
+          "path": "Sources/RecallCore/HouseTerminal.swift"
+        },
+        {
+          "repo": "memory-screenctx",
+          "path": "Sources/ScreenctxCore/HouseTerminal.swift"
+        }
+      ],
+      "mockup": "Modernize HouseDesign system (direction 1b, Slate)",
+      "proof": [
+        {
+          "repo": "memory-recall",
+          "path": "Tests/RecallCoreTests/HouseTerminalTests.swift"
+        }
+      ]
+    },
+    {
+      "key": "icon",
+      "name": "App icon",
+      "purpose": "One flat ink squircle and one white verb glyph, shared by app and status item.",
+      "section": "App icon",
+      "spec": [
+        "rounded square at the macOS 26 squircle radius, 22.5 % of the tile, tile inset 100 px on a 1024 canvas",
+        "one flat fill of the near-black ink and one white glyph at 46 % of the tile, optically centred",
+        "no gradients, no shadows, no letters in circles",
+        "the menu bar item uses the same glyph family as a template image"
+      ],
+      "implements": [
+        {
+          "repo": "design-system",
+          "path": "icons/make-icon.py"
+        }
+      ],
+      "mockup": "Modernize HouseDesign system (direction 1b, Slate)",
+      "proof": [
+        {
+          "repo": "design-system",
+          "path": "tests/test_design_system.py"
+        }
+      ]
+    },
+    {
+      "key": "meter-row",
+      "name": "Meter row",
+      "purpose": "One quota window or prepaid balance as a bar, so every metered source reads on the same axis.",
+      "section": "Shared components",
+      "spec": [
+        "28 high under a two-line provider row, inset to the provider's text column",
+        "window name in `meta` on the left in a fixed 96 px column so the bars of every provider line up",
+        "a 4 px ink bar on a `tileFill` track at `Radius.xs`; the percent in `label` with monospaced digits on the right",
+        "percent used is the one axis: a rate window reports it directly, a balance as spend since its 30-day peak",
+        "no colour: a window at its cap says 100 % and the `caption` footnote under the group says when it resets; an unknown draws an empty track, never a zero"
+      ],
+      "implements": [
+        {
+          "repo": "usage-menubar",
+          "path": "Sources/UsageBar/MenuBarPanelView.swift"
+        }
+      ],
+      "mockup": "Modernize HouseDesign system (direction 1b, Slate)",
+      "proof": [
+        {
+          "repo": "usage-menubar",
+          "path": "Sources/UsageBar/RenderProof.swift"
+        }
+      ],
+      "qualifier": "Usage"
+    },
+    {
+      "key": "status-item",
+      "name": "Status item",
+      "purpose": "The one glyph an app shows in the menu bar.",
+      "section": "Shared components",
+      "spec": [
+        "one SF Symbol from the app-icon family, as a template image at `Control.statusGlyph` (15 pt) medium weight, so every house item sits on one baseline at one weight",
+        "outline when idle; the `.fill` variant means on (a model warm, a capture running); never filled for decoration",
+        "colour only for a state that needs a word too: `danger` for recording or a permission fault, in the tooltip and the panel as well",
+        "no title text beside the glyph unless the app is a meter (Usage may show its percent in `bodySmall` monospaced digits)"
+      ],
+      "implements": [
+        {
+          "repo": "quick-launch",
+          "path": "Sources/App/AppDelegate.swift"
+        },
+        {
+          "repo": "rti",
+          "path": "RTI/Sources/UI/StatusItemSymbol.swift"
+        },
+        {
+          "repo": "cotype",
+          "path": "Sources/CotypeMenuApp/AppDelegate.swift"
+        },
+        {
+          "repo": "memory-menubar",
+          "path": "Sources/MemoryBar/AppDelegate.swift"
+        },
+        {
+          "repo": "local-models",
+          "path": "menubar/LocalModelsBar/Sources/LocalModelsBar/AppDelegate.swift"
+        },
+        {
+          "repo": "usage-menubar",
+          "path": "Sources/UsageBar/AppDelegate.swift"
+        },
+        {
+          "repo": "local-dictation",
+          "path": "src/menubar/pill.rs"
+        }
+      ],
+      "mockup": "Modernize HouseDesign system (direction 1b, Slate)",
+      "proof": [
+        {
+          "repo": "memory-menubar",
+          "path": "Sources/MemoryBar/RenderProof.swift"
+        }
+      ],
+      "qualifier": "every menu-bar app"
+    },
+    {
+      "key": "quick-ai",
+      "name": "Quick AI",
+      "purpose": "The chat surface that opens at 750 × 475 from the launcher and keeps a resized window between uses.",
+      "section": "Shared components",
+      "spec": [
+        "header 58 high with no divider: a `chevron.left` in `glyphSmall` `textSecondary`, the chat title in `subheading` over the model display name in `meta`, and an `arrow.up.right.square` expand glyph in `glyphMedium` on the right",
+        "thread: user turns as right-aligned pills on `chipFill` at `Radius.pill` in `bodySmall` `textSecondary`; answers as `body` prose capped at `Layout.quickAIAnswerMaxWidth`, no card; one tool or status line in `bodySmall` `textTertiary`",
+        "composer row along the bottom edge, inset `Spacing.xs`: a `Control.pill` plus circle on `surfaceTint`, a field at `Radius.pill` with a `stroke` hairline and no fill, and a matching `command` circle; the field grows from one to four lines, then scrolls; its primary action is a button with `label` text and a key cap; `↩` sends and `⇧↩` inserts a new line; attachment and action panes scroll within the remaining space above the measured composer; no footer well",
+        "Recent Chats (`⌘P`) in place of the thread: a `section` label with its key hints, then the launcher-panel chat rows (26 px `IconTile`, `label` title, `meta` question count and time, 40 high) pinned first, selection = `selectionFill` + `selectionRing`; the composer reads Open ↩"
+      ],
+      "implements": [
+        {
+          "repo": "quick-launch",
+          "path": "Sources/Views/QuickAIView.swift"
+        },
+        {
+          "repo": "quick-launch",
+          "path": "Sources/Views/QuickAIComposer.swift"
+        }
+      ],
+      "mockup": "Modernize HouseDesign system (direction 1b, Slate)",
+      "proof": [
+        {
+          "repo": "quick-launch",
+          "path": "Tests/OverlayRenderProofTests.swift"
+        },
+        {
+          "repo": "quick-launch",
+          "path": "Tests/LongComposerTests.swift"
+        }
+      ],
+      "qualifier": "Quick Launch"
+    },
+    {
+      "key": "ai-chat-window",
+      "name": "AI Chat window",
+      "purpose": "One conversation window over the same providers and tools as Quick AI, for a chat that needs to stay open beside other work.",
+      "section": "Shared components",
+      "spec": [
+        "a normal titled window with a transparent title bar on the opaque `surface` ground, `Layout.chatWidth` × `Layout.chatHeight`, at least `chatMinWidth` × `chatMinHeight`, its frame kept",
+        "header `Control.input` high sharing its row with the traffic lights: a `sidebar.left` glyph in `glyphSmall` `textSecondary`, the Quick AI title block (title in `subheading` over the model in `meta`), and a `square.and.pencil` new-chat glyph in `glyphMedium` on the right",
+        "the Quick AI thread and composer as shared subviews; the composer grows to eight lines, `↩` sends and `⇧↩` starts a new line",
+        "find bar (`⌘F`) under the header: `Control.pill` high at `Radius.md` on `surfaceTint` with a `stroke` hairline, the count in `meta` `textTertiary`, Next and Previous key hints; the current match drawn with `selectionFill` + `selectionRing`",
+        "chat list rail `Layout.chatRail` wide on `surfaceSunken`, hidden until `⌃⌘S`: a `Control.chip` search field at `Radius.sm`, `section` labels Pinned then Recent, two-line rows `Control.row` high (`label` title over `meta` count and time), selection = `selectionFill` + `selectionRing`, `⌘1`…`⌘9` caps on the open and highlighted rows, `⌘K` row actions with a separate fuzzy search on a raised card",
+        "the chat list rail begins with the pinned Chief of Staff row (never renamed or deleted, no ⌘ number), its waiting count as `meta` digits on a `chipFill` capsule; opened, a status line carries health as a status dot and words, the project filter chip, and List, Board, Activity, Artifacts and Charter (⌥⌘1 to ⌥⌘5; ⌘1 to ⌘9 stay the rail's), the current one selected with its caps; Activity groups the day under `section` labels with `meta` times, Artifacts lists drafts as 40-high rows with Open and Discuss, Charter shows its sections read only with Add rule and Edit charter and the rungs with Remove; its other keys (⌥↑ Cards, ⌘N New task, ⇧⌘P Project, ⇧⌘↩ Do all Today, ⌘I Health, ⇧⌘T Tasks) as key caps in a strip over the composer; the List (DECIDE, TODAY, WAITING ON OTHERS, PROJECTS rows with a risk dot and words, LATER, FYI) scrolls within 60 % of the conversation over the thread; the Board's columns (Decide, Today, Waiting, Later, Done this week) take the thread's room; ↑ from an empty composer or ⌥↑ moves onto the cards, esc back; the root view forces no minimum width, so any window width reflows"
+      ],
+      "implements": [
+        {
+          "repo": "quick-launch",
+          "path": "Sources/Views/AIChatWindowView.swift"
+        }
+      ],
+      "mockup": "Modernize HouseDesign system (direction 1b, Slate)",
+      "proof": [
+        {
+          "repo": "quick-launch",
+          "path": "Tests/AIChatRenderProofTests.swift"
+        },
+        {
+          "repo": "quick-launch",
+          "path": "Tests/OverlayRenderProofTests.swift"
+        }
+      ],
+      "qualifier": "Quick Launch"
+    },
+    {
+      "key": "selected-text-preview",
+      "name": "Selected text preview",
+      "qualifier": "Quick AI and AI Chat",
+      "purpose": "Inspect the complete text attached to the next question before sending it.",
+      "section": "Shared components",
+      "spec": [
+        "a Preview button on the selected-text chip, also opened with `⌥⌘I`",
+        "a popover with the source app, a complete selectable and scrollable text view in `body`, and a clear next-message status",
+        "uses `surface`, `textPrimary`, shared spacing and corner radii; stays readable in both appearances"
+      ],
+      "implements": [
+        {
+          "repo": "quick-launch",
+          "path": "Sources/Views/SelectedTextPreview.swift"
+        }
+      ],
+      "proof": [
+        {
+          "repo": "quick-launch",
+          "path": "Tests/AttachmentUsabilityRenderProofTests.swift"
+        }
+      ],
+      "mockup": "Native SwiftUI render proof: quick-launch/Tests/AttachmentUsabilityRenderProofTests.swift"
+    },
+    {
+      "key": "dictation-recovery-detail",
+      "name": "Dictation recovery detail",
+      "qualifier": "Local Dictation",
+      "purpose": "Inspect and recover a captured dictation without replaying actions into the current app.",
+      "section": "Shared components",
+      "spec": [
+        "shows the saved audio with playback and the dictation status, followed by selectable raw and processed text versions",
+        "Recover re-transcribes the saved audio with optional cleanup and copies the result to the clipboard; existing versions remain available",
+        "audio is local, retained for 30 days by default, with retention and recovery controls in Settings; expired or unavailable audio is stated beside its actions",
+        "uses House settings/list surfaces, semantic text and status tokens, and native keyboard-accessible controls in both appearances"
+      ],
+      "implements": [
+        {
+          "repo": "local-dictation",
+          "path": "src/menubar/history_detail.rs"
+        }
+      ],
+      "proof": [
+        {
+          "repo": "local-dictation",
+          "path": "src/menubar/render_ui.rs"
+        }
+      ],
+      "mockup": "Native render-ui proof: history-detail-{completed,failed,cancelled}-{dark,light}.png"
+    },
+    {
+      "key": "session-browser",
+      "name": "Session browser",
+      "qualifier": "RTI",
+      "purpose": "Read an archived meeting, replay its audio, and act on its content.",
+      "section": "Shared components",
+      "spec": [
+        "sidebar rows use `Radius.row`; file selectors are compact pills; content sections use `Radius.lg` and a readable column capped at `Layout.rtiAnswerMaxWidth`",
+        "Copy, Share, Trash, and playback icon controls are circles with the shared icon-action treatment",
+        "audio playback aligns the retained microphone and system legs; the player shows play/pause, seek, time and explicit availability",
+        "saved chat content has a clear route to the existing session-grounded House composer; deletion confirms Move to Trash for owned archives"
+      ],
+      "implements": [
+        {
+          "repo": "rti",
+          "path": "RTI/Sources/UI/SessionsControl/SessionsBrowserView.swift"
+        },
+        {
+          "repo": "rti",
+          "path": "RTI/Sources/UI/SessionsControl/SessionPlaybackBar.swift"
+        }
+      ],
+      "proof": [
+        {
+          "repo": "rti",
+          "path": "RTI/RenderTests/SessionsWindowRenderProofTests.swift"
+        },
+        {
+          "repo": "rti",
+          "path": "RTI/RenderTests/SessionPlaybackActionProofTests.swift"
+        }
+      ],
+      "mockup": "User-supplied session-window references; synthetic RTI SessionsWindowRenderProofTests"
+    },
+    {
+      "key": "setup-checklist",
+      "name": "Setup checklist",
+      "purpose": "Get a fresh install from launch to a working dictation, and say which requirement is missing when one is.",
+      "section": "Shared components",
+      "spec": [
+        "a standalone panel on the opaque `surface` ground at `Layout.panelWidth`, with the shared panel chrome",
+        "a pane title in `title` over a `meta` subtitle stating what is still needed",
+        "one requirement per row, `Control.row` high: a 26 px icon tile, the requirement in `label` over its live state in `meta`, a status dot, and a chip carrying its single action on the right",
+        "status is a dot plus a word, never colour alone: `success` when satisfied, `danger` when not",
+        "state is re-read about once a second while the window is open, so a grant made in System Settings lands without a relaunch and the row's action drops away",
+        "footer well with the hint on the left"
+      ],
+      "implements": [
+        {
+          "repo": "local-dictation",
+          "path": "src/menubar/setup.rs"
+        }
+      ],
+      "mockup": "Modernize HouseDesign system (direction 1b, Slate)",
+      "proof": [
+        {
+          "repo": "local-dictation",
+          "path": "src/menubar/render_ui.rs"
+        }
+      ],
+      "qualifier": "Local Dictation"
+    },
+    {
+      "key": "proposal-card",
+      "name": "Proposal card",
+      "purpose": "One proposal from the chief of staff, answered with Do it, Edit, Later or No before anything acts; keyboard first in Quick Launch's pinned Chief of Staff conversation.",
+      "section": "Shared components",
+      "spec": [
+        "a DECIDE card: raised on `surfaceRaised` at `Radius.lg` with a `stroke` hairline, the `highlightTop` line, and the `card` shadow; `Spacing.sm` inside",
+        "source, the due day as a phrase (by tomorrow, 2 days late) and time in `meta`; the headline in `heading`, why in `bodySmall` `textSecondary`; a card with no headline shows its message in `body`",
+        "the message in `body` `textPrimary`; the numbered actions under it: the number in `meta` `textTertiary` in a `Spacing.sm` column, the type label and due date in `caption`, the action text in `bodySmall` `textSecondary`",
+        "buttons `Control.chip` high at `Radius.tile`: Do it (Got it when nothing runs) an ink fill with inverse ink, Edit, Later and No outlined like key caps; never accent; they wrap when the card is narrow",
+        "Edit turns each action into its own field (a note, a task title and due date, or a reply body) in a `well` at `Radius.sm` with a `strokeStrong` hairline, and the buttons become Run and Cancel; Escape leaves Edit",
+        "after a verdict the card shows one line per action: a `success` or `danger` dot, OK or FAIL in `label`, and the detail in `meta`; never colour alone",
+        "the card with the keyboard wears a `strokeStrong` hairline and shows its keys as outlined caps beside its buttons: ⌘↩ Do it, ⌘E Edit, ⌘L Later, ⌘⌫ No; ⌘L opens a raised menu of Tonight, Tomorrow 9:00, Next week and Pick date (1 to 4); TODAY cards are 40-high rows (headline in `label`, source, actions and due in `meta`, one Do it); WAITING, LATER and FYI are one-line rows in collapsed sections; the Board shows compact tiles at `Radius.row`",
+        "every card carries quiet More and Less glyphs (`caption` `textTertiary`, filled once given, ⌘= ⌘-); an escalated card shows a `warning` dot, Reviewer in `label` and the reason in `meta`; Discuss (⌘D) sits with the buttons; after a Do it the offer \"Always do this for <project>?\" is a `surfaceTint` strip at `Radius.lg` with Always (⌘Y, ink) and Not now (esc); a card a rung ran reads \"I did this\" under FYI with Undo (⌘Z); the morning brief is a `surfaceTint` card pinned first in TODAY; a meeting card leads with \"Starts in N min\", its place and project",
+        "`cos tell`: in the pinned conversation a reply that made a card draws that card under it with the keyboard on it; typing or a bare ↩ on a card writes about it, shown as an About chip at `Control.chip` on `chipFill` over the key strip (esc clears); Discuss opens a branch (Continue branch once one exists): a strip over its composer with the branch glyph, \"Branch · <headline>\" in `meta` and Close branch (⇧⌘W, an outlined button with its caps); a card the branch made joins it after the answer, the reply named \"Chief of Staff:\"; the merge-back line sits under its card in EARLIER (glyph, text in `meta`, Open branch); branch rows nest under the pinned row in the rail, indented `Spacing.md`, unnumbered"
+      ],
+      "implements": [
+        {
+          "repo": "quick-launch",
+          "path": "Sources/Views/ProposalCard.swift"
+        },
+        {
+          "repo": "quick-launch",
+          "path": "Sources/Views/ChiefOfStaffViews.swift"
+        },
+        {
+          "repo": "quick-launch",
+          "path": "Sources/Views/ChiefOfStaffTellViews.swift"
+        }
+      ],
+      "mockup": "Modernize HouseDesign system (direction 1b, Slate)",
+      "proof": [
+        {
+          "repo": "quick-launch",
+          "path": "Tests/ChiefOfStaffRenderProofTests.swift"
+        }
+      ],
+      "qualifier": "Chief of Staff"
+    },
+    {
+      "key": "live-transcript",
+      "name": "Live transcript",
+      "purpose": "Read a meeting as it happens: who said what, calm enough to glance at mid-call.",
+      "section": "Shared components",
+      "spec": [
+        "no box or chip per speaker; a run of one speaker carries one label line: a 6 px speaker-palette dot, the name in `meta` medium `textSecondary`, the time in `caption` `textTertiary`",
+        "the mic wearer's runs sit on the right as a `chipFill` bubble at `Radius.pill` in `bodySmall` `textPrimary`, inset `Spacing.xxxxl` from the left; everyone else is plain `bodySmall` text on the left capped at `Layout.answerMaxWidth`",
+        "speaker labels come from the speaker id and never change mid-meeting (You, Speaker N, Room speaker N); a click names the speaker, offering the confirmed meeting's invitees first",
+        "interim words follow the final words in `textTertiary` in the run they belong to, so a final result recolours them in place",
+        "a long run breaks into paragraphs `Spacing.sm` apart at sentence ends; a break never moves once made, and interim words join only the open paragraph",
+        "runs `Spacing.lg` apart; a note is a glyph label over `textSecondary` text; the list follows the latest line until the user scrolls up, then a `Control.chip` capsule on `surfaceRaised` offers Jump to latest",
+        "archived transcripts in the Session browser use the same label line, once per run of one speaker, with the dot colour the live view gave that speaker"
+      ],
+      "implements": [
+        {
+          "repo": "rti",
+          "path": "RTI/Sources/UI/Overlay/LiveTranscriptView.swift"
+        },
+        {
+          "repo": "rti",
+          "path": "RTI/Sources/UI/SessionsControl/SessionsBrowserView.swift"
+        }
+      ],
+      "mockup": "Modernize HouseDesign system (direction 1b, Slate)",
+      "proof": [
+        {
+          "repo": "rti",
+          "path": "RTI/RenderTests/TranscriptRenderProofTests.swift"
+        }
+      ],
+      "qualifier": "RTI"
+    }
+  ]
+}
