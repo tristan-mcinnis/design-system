@@ -626,45 +626,6 @@
       "qualifier": "Local Dictation"
     },
     {
-      "key": "proposal-card",
-      "name": "Proposal card",
-      "purpose": "One proposal from the chief of staff, answered with Do it, Edit, Later or No before anything acts; keyboard first in Quick Launch's pinned Chief of Staff conversation.",
-      "section": "Shared components",
-      "spec": [
-        "a DECIDE card: raised on `surfaceRaised` at `Radius.lg` with a `stroke` hairline, the `highlightTop` line, and the `card` shadow; `Spacing.sm` inside",
-        "source, the due day as a phrase (by tomorrow, 2 days late) and time in `meta`; the headline in `heading`, why in `bodySmall` `textSecondary`; a card with no headline shows its message in `body`",
-        "the message in `body` `textPrimary`; the numbered actions under it: the number in `meta` `textTertiary` in a `Spacing.sm` column, the type label and due date in `caption`, the action text in `bodySmall` `textSecondary`",
-        "buttons `Control.chip` high at `Radius.tile`: Do it (Got it when nothing runs) an ink fill with inverse ink, Edit, Later and No outlined like key caps; never accent; they wrap when the card is narrow",
-        "Edit turns each action into its own field (a note, a task title and due date, or a reply body) in a `well` at `Radius.sm` with a `strokeStrong` hairline, and the buttons become Run and Cancel; Escape leaves Edit",
-        "after a verdict the card shows one line per action: a `success` or `danger` dot, OK or FAIL in `label`, and the detail in `meta`; never colour alone",
-        "the card with the keyboard wears a `strokeStrong` hairline and shows its keys as outlined caps beside its buttons: ⌘↩ Do it, ⌘E Edit, ⌘L Later, ⌘⌫ No; ⌘L opens a raised menu of Tonight, Tomorrow 9:00, Next week and Pick date (1 to 4); TODAY cards are 40-high rows (headline in `label`, source, actions and due in `meta`, one Do it); WAITING, LATER and FYI are one-line rows in collapsed sections; the Board shows compact tiles at `Radius.row`",
-        "every card carries quiet More and Less glyphs (`caption` `textTertiary`, filled once given, ⌘= ⌘-); an escalated card shows a `warning` dot, Reviewer in `label` and the reason in `meta`; Discuss (⌘D) sits with the buttons; after a Do it the offer \"Always do this for <project>?\" is a `surfaceTint` strip at `Radius.lg` with Always (⌘Y, ink) and Not now (esc); a card a rung ran reads \"I did this\" under FYI with Undo (⌘Z); the morning brief is a `surfaceTint` card pinned first in TODAY; a meeting card leads with \"Starts in N min\", its place and project",
-        "`cos tell`: in the pinned conversation a reply that made a card draws that card under it with the keyboard on it; typing or a bare ↩ on a card writes about it, shown as an About chip at `Control.chip` on `chipFill` over the key strip (esc clears); Discuss opens a branch (Continue branch once one exists): a strip over its composer with the branch glyph, \"Branch · <headline>\" in `meta` and Close branch (⇧⌘W, an outlined button with its caps); a card the branch made joins it after the answer, the reply named \"Chief of Staff:\"; the merge-back line sits under its card in EARLIER (glyph, text in `meta`, Open branch); branch rows nest under the pinned row in the rail, indented `Spacing.md`, unnumbered"
-      ],
-      "implements": [
-        {
-          "repo": "quick-launch",
-          "path": "Sources/Views/ProposalCard.swift"
-        },
-        {
-          "repo": "quick-launch",
-          "path": "Sources/Views/ChiefOfStaffViews.swift"
-        },
-        {
-          "repo": "quick-launch",
-          "path": "Sources/Views/ChiefOfStaffTellViews.swift"
-        }
-      ],
-      "mockup": "Modernize HouseDesign system (direction 1b, Slate)",
-      "proof": [
-        {
-          "repo": "quick-launch",
-          "path": "Tests/ChiefOfStaffRenderProofTests.swift"
-        }
-      ],
-      "qualifier": "Chief of Staff"
-    },
-    {
       "key": "live-transcript",
       "name": "Live transcript",
       "purpose": "Read a meeting as it happens: who said what, calm enough to glance at mid-call.",
