@@ -31,7 +31,7 @@ that repo, recorded in its `CLAUDE.md` and `Package.swift` or `project.yml`.
 
 An iOS app is a house app: same tokens, same rule, same registry.
 
-- The generated `HouseDesign.swift` compiles on both platforms. `NSColorToken` on AppKit, `UIColorToken` on UIKit, `ColorToken` on both. Copy it as on macOS.
+- The `HouseDesign` product compiles on both platforms (the package declares macOS 14 and iOS 17). `NSColorToken` on AppKit, `UIColorToken` on UIKit, `ColorToken` on both. Depend on the package by GitHub URL and tag, as on macOS. `HouseUIKit` is AppKit only and is empty on iOS.
 - Build with an `xcodegen` `project.yml` (the RTI pattern), not a bare SwiftPM executable: iOS needs a bundle, signing, and a simulator destination.
 - Verify on the simulator: `xcodebuild -project X.xcodeproj -scheme X -destination 'platform=iOS Simulator,name=iPhone 17' build test`.
 - Register iOS surfaces in `components.json` before building them, with a render proof in both appearances, as on macOS.

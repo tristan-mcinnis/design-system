@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
-"""Emit HouseDesign.swift from tokens.json.
+"""Emit the HouseDesign module source from tokens.json.
 
     python3 gen/gen-swift.py [--out path]   (default: stdout)
 
-Output: `enum House` with ColorToken (SwiftUI.Color, adaptive), a platform
+Output (public API of the HouseDesign library product): `public enum House` with ColorToken (SwiftUI.Color, adaptive), a platform
 colour enum (NSColorToken on AppKit via NSColor(name:dynamicProvider:),
 UIColorToken on UIKit via UIColor(dynamicProvider:)), TypeToken, Radius,
 Spacing, Control, Motion, Hairline. One file compiles on macOS and iOS.
 Deterministic.
 """
 import argparse
+import re
 import sys
 from pathlib import Path
 
@@ -31,7 +32,7 @@ def ui(v):
 
 def render(t):
     out = [header("//"), "// Source of truth: the design-system repo (DESIGN.md + tokens.json).\n",
-           "// Regenerate with `make swift` there; `make check` verifies this copy.\n\n",
+           "// Regenerate with `make swift`; `make check` verifies this file.\n\n",
            "import SwiftUI\n",
            "#if canImport(AppKit)\nimport AppKit\n#elseif canImport(UIKit)\nimport UIKit\n#endif\n\n",
            "/// House design tokens. Semantic names only; colours adapt to the\n"
@@ -112,7 +113,7 @@ def render(t):
     out.append("    }\n\n")
 
     out.append("    /// A soft black shadow: offset, blur radius, and opacity per appearance.\n")
-    out.append("    struct ShadowSpec {\n        let y: CGFloat\n        let blur: CGFloat\n        let light: Double\n        let dark: Double\n")
+    out.append("    struct ShadowSpec: Sendable {\n        let y: CGFloat\n        let blur: CGFloat\n        let light: Double\n        let dark: Double\n")
     out.append("        /// Opacity for the given appearance.\n")
     out.append("        func opacity(dark isDark: Bool) -> Double { isDark ? dark : light }\n    }\n\n")
     out.append("    enum Shadow {\n")
@@ -139,7 +140,23 @@ def render(t):
     out.append("    }\n\n")
     out.append(f"    static let hairline: CGFloat = {fmt(t['stroke']['hairline'])}\n")
     out.append("}\n")
-    return "".join(out)
+    return publicize("".join(out))
+
+
+PUBLIC_DECL = re.compile(r"^(\s*)(enum|struct|static let|func|let) ", re.M)
+ADAPTIVE = re.compile(r"^\s*static func adaptive\(", re.M)
+
+
+def publicize(text):
+    """Every declaration is public API of the HouseDesign module, except the
+    `adaptive` colour helpers, which stay internal."""
+    out = []
+    for line in text.split("\n"):
+        if ADAPTIVE.match(line):
+            out.append(line)
+            continue
+        out.append(PUBLIC_DECL.sub(r"\1public \2 ", line, count=1))
+    return "\n".join(out)
 
 
 def main():

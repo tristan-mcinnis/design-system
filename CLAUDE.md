@@ -4,17 +4,8 @@
 under 120 lines); the code rule is `SWIFT.md` (concurrency, tests, platform
 floors, iOS). `tokens.json` is the only place a value is typed by hand.
 
-- Change a value: edit `tokens.json`, run `make gen`, run `make test` (and `make family-check` with the siblings cloned), then copy
-  `generated/HouseDesign.swift` and `generated/house_theme.rs` into every
-  consuming repo (the `CONSUMERS` list in the Makefile) and commit there too.
-  The Swift file compiles on macOS and iOS. The atlas flags a stale copy as
-  `DESIGN-DRIFT`.
-- The menu-bar kit is hand-written and lives in `kit/` (`HouseUI.swift`,
-  `MenuBarPanel.swift`). Edit it here, run `make sync-kit` to copy it into the
-  four menu-bar apps (cotype, memory-menubar, usage-menubar, local-models), and
-  commit there too. `make check-consumers` fails on any drifted copy. An app's
-  own panel code goes in app-local files (`MenuBarPanelView.swift`,
-  `MenuBarPanelController.swift`), never in the copies.
+- Change a value: edit `tokens.json`, run `make gen`, run `make test` (and `make family-check` with the siblings cloned). `Sources/HouseDesign/HouseDesign.swift` is the generated Swift module; `generated/house_theme.rs` is the generated Rust copy that local-dictation still carries (copy it there and commit). Then release: tag `vX.Y.Z` (patch for a value or fix, minor for new public API, major for a removed or renamed public symbol), push the tag, and raise the `from:` pin in each app (`make check-consumers` lists them).
+- The Swift apps depend on this repo as a package by GitHub URL and tag, with two products: `HouseDesign` (tokens) and `HouseUIKit` (the hand-written menu-bar kit in `Sources/HouseUIKit/`: `HouseUI.swift`, `MenuBarPanel.swift`). Everything an app uses is `public`; adding a kit view means a public type, a public `init` and a public `body`. An app's own panel code goes in app-local files (`MenuBarPanelView.swift`, `MenuBarPanelController.swift`), never in the package. `make check-consumers` fails on a missing pin, a relative-path dependency or a copied source file.
 - Never hand-edit a generated file. Generators must stay deterministic: no
   timestamps, no environment reads.
 - Icons: add a glyph as a path function in `icons/make-icon.py`; render 256 px

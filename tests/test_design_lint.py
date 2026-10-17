@@ -410,12 +410,13 @@ class Registry(unittest.TestCase):
         `check` must flag it when it registers nothing."""
         import importlib.machinery
         import importlib.util
-        import re
         loader = importlib.machinery.SourceFileLoader("design_registry", str(REGISTRY))
         mod = importlib.util.module_from_spec(importlib.util.spec_from_loader(loader.name, loader))
         loader.exec_module(mod)
-        makefile = (ROOT / "Makefile").read_text()
-        consumers = set(re.findall(r"^\s*(?:\.\.|\$\(HOUSE\))/([^/\s]+)/", makefile, flags=re.M))
+        loader = importlib.machinery.SourceFileLoader("check_consumers", str(ROOT / "bin" / "check-consumers"))
+        pins = importlib.util.module_from_spec(importlib.util.spec_from_loader(loader.name, loader))
+        loader.exec_module(pins)
+        consumers = {repo for repo, _, _ in pins.CONSUMERS} | {pins.RUST_COPY[0]}
         self.assertTrue(consumers)
         self.assertEqual(sorted(consumers - set(mod.VIEW_REPOS)), [])
 

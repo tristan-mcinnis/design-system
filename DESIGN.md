@@ -115,4 +115,4 @@ into the menu bar. A new app gets one SF-style silhouette naming its verb, as a 
 
 ## Consuming the system
 
-Copy the generated file into the app and commit it; the header carries the `tokens.json` sha. Change a value in `tokens.json`, run `make gen`, then recopy. A token file in the repo is plumbing, not a look: `make lint` runs `bin/design-lint`, which refuses a repo that gains a hard radius, colour or size, and the atlas flags one as `DESIGN-DRIFT`. `components.json` registers every shared surface: register and render-prove a new one before it ships.
+Swift apps take the tokens as the `HouseDesign` package product and the menu-bar kit as `HouseUIKit`, pinned by GitHub URL and tag; the Rust file is the one generated copy (its header carries the `tokens.json` sha). Change a value in `tokens.json`, run `make gen`, tag a release, then raise the pin in each app. A token file in the repo is plumbing, not a look: `make lint` runs `bin/design-lint`, which refuses a repo that gains a hard radius, colour or size, and the atlas flags one as `DESIGN-DRIFT`. `components.json` registers every shared surface: register and render-prove a new one before it ships.

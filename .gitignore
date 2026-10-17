@@ -3,3 +3,5 @@ __pycache__/
 .DS_Store
 generated/preview-*.png
 .scrub-private
+.build/
+.swiftpm/

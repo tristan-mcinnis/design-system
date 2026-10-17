@@ -231,12 +231,8 @@
           "path": "RTI/Sources/UI/Overlay/OverlayTheme.swift"
         },
         {
-          "repo": "cotype",
-          "path": "Sources/CotypeMenuApp/HouseUI.swift"
-        },
-        {
-          "repo": "memory-menubar",
-          "path": "Sources/MemoryBar/HouseUI.swift"
+          "repo": "design-system",
+          "path": "Sources/HouseUIKit/HouseUI.swift"
         }
       ],
       "mockup": "Modernize HouseDesign system (direction 1b, Slate)",
@@ -273,24 +269,8 @@
       ],
       "implements": [
         {
-          "repo": "cotype",
-          "path": "Sources/CotypeMenuApp/MenuBarPanel.swift"
-        },
-        {
-          "repo": "memory-menubar",
-          "path": "Sources/MemoryBar/MenuBarPanel.swift"
-        },
-        {
-          "repo": "local-models",
-          "path": "menubar/LocalModelsBar/Sources/LocalModelsBar/MenuBarPanel.swift"
-        },
-        {
-          "repo": "usage-menubar",
-          "path": "Sources/UsageBar/MenuBarPanel.swift"
-        },
-        {
           "repo": "design-system",
-          "path": "kit/MenuBarPanel.swift"
+          "path": "Sources/HouseUIKit/MenuBarPanel.swift"
         }
       ],
       "mockup": "Modernize HouseDesign system (direction 1b, Slate)",

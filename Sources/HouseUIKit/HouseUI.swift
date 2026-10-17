@@ -1,31 +1,29 @@
-// SHARED KIT, DO NOT EDIT. Source: design-system/kit/HouseUI.swift.
-// Copy from design-system (`make sync-kit` there); `make check-consumers`
-// fails when a consumer's copy differs.
-//
 // The Slate component kit for the house menu-bar apps: panel glass, icon tile,
 // key caps, status dot, ink toggle, cards, rows, footer well, rail, segmented
 // control. Every value comes from `House` (generated from
 // design-system/tokens.json); nothing in this file retypes a token. See
 // design-system/DESIGN.md for the rule these components follow.
 
-import SwiftUI
+#if canImport(AppKit)
 import AppKit
+import HouseDesign
+import SwiftUI
 
 // MARK: - Appearance
 
 /// The user's window appearance choice. Dark is the house default; light is
 /// first-class. `system` follows macOS.
-enum AppearancePreference: String, CaseIterable, Identifiable {
+public enum AppearancePreference: String, CaseIterable, Identifiable {
     case system
     case light
     case dark
 
     /// UserDefaults key. Registered with `dark` as the default.
-    static let key = "appearance"
+    public static let key = "appearance"
 
-    var id: String { rawValue }
+    public var id: String { rawValue }
 
-    var title: String {
+    public var title: String {
         switch self {
         case .system: return "System"
         case .light: return "Light"
@@ -33,7 +31,7 @@ enum AppearancePreference: String, CaseIterable, Identifiable {
         }
     }
 
-    var nsAppearance: NSAppearance? {
+    public var nsAppearance: NSAppearance? {
         switch self {
         case .system: return nil
         case .light: return NSAppearance(named: .aqua)
@@ -41,13 +39,13 @@ enum AppearancePreference: String, CaseIterable, Identifiable {
         }
     }
 
-    static var current: AppearancePreference {
+    public static var current: AppearancePreference {
         AppearancePreference(rawValue: UserDefaults.standard.string(forKey: key) ?? "") ?? .dark
     }
 
     /// Apply to the whole app, so every app window (settings, menu-bar panel) resolves the same tokens.
     @MainActor
-    static func applyCurrent() {
+    public static func applyCurrent() {
         NSApp.appearance = current.nsAppearance
     }
 }
@@ -56,7 +54,7 @@ enum AppearancePreference: String, CaseIterable, Identifiable {
 
 extension View {
     /// Apply a `House.ShadowSpec` at the given appearance.
-    func houseShadow(_ spec: House.ShadowSpec, dark: Bool) -> some View {
+    public func houseShadow(_ spec: House.ShadowSpec, dark: Bool) -> some View {
         shadow(
             color: Color.black.opacity(spec.opacity(dark: dark)),
             radius: spec.blur / 2,
@@ -69,8 +67,10 @@ extension View {
 // MARK: - Glass
 
 /// The blur material behind `panelTint` on every floating app panel.
-struct HouseBlur: NSViewRepresentable {
-    func makeNSView(context: Context) -> NSVisualEffectView {
+public struct HouseBlur: NSViewRepresentable {
+    public init() {}
+
+    public func makeNSView(context: Context) -> NSVisualEffectView {
         let view = NSVisualEffectView()
         view.material = .hudWindow
         view.blendingMode = .behindWindow
@@ -78,19 +78,24 @@ struct HouseBlur: NSViewRepresentable {
         return view
     }
 
-    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {}
+    public func updateNSView(_ nsView: NSVisualEffectView, context: Context) {}
 }
 
 /// The shared floating-panel surface: blur material, `panelTint`, `stroke`,
 /// `highlightTop`, and the two panel shadows.
-struct HouseGlass<Content: View>: View {
-    var radius: CGFloat = House.Radius.xl
+public struct HouseGlass<Content: View>: View {
+    public var radius: CGFloat = House.Radius.xl
     @Environment(\.colorScheme) private var scheme
-    @ViewBuilder var content: Content
+    @ViewBuilder public var content: Content
 
     private var isDark: Bool { scheme == .dark }
 
-    var body: some View {
+    public init(radius: CGFloat = House.Radius.xl, @ViewBuilder content: () -> Content) {
+        self.radius = radius
+        self.content = content()
+    }
+
+    public var body: some View {
         content
             .background(
                 ZStack {
@@ -116,10 +121,12 @@ struct HouseGlass<Content: View>: View {
 // MARK: - Key caps
 
 /// One outlined key cap: 20 high, `keyCapStroke`, `Radius.xs`, SF (not mono).
-struct KeyCap: View {
-    let label: String
+public struct KeyCap: View {
+    public let label: String
 
-    var body: some View {
+    public init(label: String) { self.label = label }
+
+    public var body: some View {
         Text(label)
             .font(House.TypeToken.keyCap)
             .foregroundStyle(House.ColorToken.textSecondary)
@@ -138,10 +145,10 @@ struct KeyCap: View {
 }
 
 /// A chord rendered as one cap per key, the way the mockups draw them.
-struct KeyCaps: View {
-    let keys: [String]
+public struct KeyCaps: View {
+    public let keys: [String]
 
-    init(_ keys: [String]) { self.keys = keys }
+    public init(_ keys: [String]) { self.keys = keys }
 
     /// The modifier glyphs that always get their own cap.
     private static let modifiers: Set<Character> = ["⌘", "⌥", "⌃", "⇧"]
@@ -160,7 +167,7 @@ struct KeyCaps: View {
 
     /// Split a display chord ("⌥Tab", "⌘,", "⌃.") into its caps: one cap per
     /// leading modifier, then one cap for whatever base key remains.
-    init(chord: String) {
+    public init(chord: String) {
         let spaced = chord.split(separator: " ").map(String.init)
         if spaced.count > 1 {
             self.keys = spaced.map(Self.capLabel)
@@ -178,7 +185,7 @@ struct KeyCaps: View {
         self.keys = caps.isEmpty ? [chord] : caps
     }
 
-    var body: some View {
+    public var body: some View {
         HStack(spacing: House.Spacing.xxs) {
             ForEach(Array(keys.enumerated()), id: \.offset) { _, key in
                 KeyCap(label: key)
@@ -188,11 +195,16 @@ struct KeyCaps: View {
 }
 
 /// A key hint that pairs a word with its caps ("Next word ⇥").
-struct KeyHint: View {
-    let title: String
-    let chord: String
+public struct KeyHint: View {
+    public let title: String
+    public let chord: String
 
-    var body: some View {
+    public init(title: String, chord: String) {
+        self.title = title
+        self.chord = chord
+    }
+
+    public var body: some View {
         HStack(spacing: House.Spacing.xs) {
             Text(title)
                 .font(House.TypeToken.meta)
@@ -207,11 +219,16 @@ struct KeyHint: View {
 // MARK: - Tiles, dots, pills
 
 /// A row glyph in a tile, so rows align whatever the symbol width.
-struct IconTile: View {
-    let symbol: String
-    var size: CGFloat = House.Control.tile
+public struct IconTile: View {
+    public let symbol: String
+    public var size: CGFloat = House.Control.tile
 
-    var body: some View {
+    public init(symbol: String, size: CGFloat = House.Control.tile) {
+        self.symbol = symbol
+        self.size = size
+    }
+
+    public var body: some View {
         RoundedRectangle(cornerRadius: House.Radius.tile, style: .continuous)
             .fill(House.ColorToken.tileFill)
             .overlay(
@@ -229,11 +246,16 @@ struct IconTile: View {
 
 /// The one piece of colour on any app surface: a status dot. Always paired
 /// with a word, never colour alone.
-struct StatusDot: View {
-    var tint: Color = House.ColorToken.success
-    var diameter: CGFloat = 6
+public struct StatusDot: View {
+    public var tint: Color = House.ColorToken.success
+    public var diameter: CGFloat = 6
 
-    var body: some View {
+    public init(tint: Color = House.ColorToken.success, diameter: CGFloat = 6) {
+        self.tint = tint
+        self.diameter = diameter
+    }
+
+    public var body: some View {
         Circle()
             .fill(tint)
             .frame(width: diameter, height: diameter)
@@ -241,11 +263,16 @@ struct StatusDot: View {
 }
 
 /// "Granted", "Warm": an outlined pill with a 6 px status dot.
-struct StatusPill: View {
-    let text: String
-    var tint: Color = House.ColorToken.success
+public struct StatusPill: View {
+    public let text: String
+    public var tint: Color = House.ColorToken.success
 
-    var body: some View {
+    public init(text: String, tint: Color = House.ColorToken.success) {
+        self.text = text
+        self.tint = tint
+    }
+
+    public var body: some View {
         HStack(spacing: House.Spacing.xxs) {
             StatusDot(tint: tint)
             Text(text)
@@ -265,10 +292,12 @@ struct StatusPill: View {
 
 /// A done mark: an 18 px ink disc with an ink-inverse check. Not-done is the
 /// same disc as a quiet outline, so the pair reads without colour.
-struct DoneDisc: View {
-    let done: Bool
+public struct DoneDisc: View {
+    public let done: Bool
 
-    var body: some View {
+    public init(done: Bool) { self.done = done }
+
+    public var body: some View {
         ZStack {
             if done {
                 Circle().fill(House.ColorToken.textPrimary)
@@ -285,10 +314,12 @@ struct DoneDisc: View {
 }
 
 /// A small outlined action chip ("Record", "Enable").
-struct HouseChipButtonStyle: ButtonStyle {
-    var destructive = false
+public struct HouseChipButtonStyle: ButtonStyle {
+    public var destructive = false
 
-    func makeBody(configuration: Configuration) -> some View {
+    public init(destructive: Bool = false) { self.destructive = destructive }
+
+    public func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(House.TypeToken.meta)
             .foregroundStyle(destructive ? House.ColorToken.danger : House.ColorToken.textPrimary)
@@ -307,8 +338,10 @@ struct HouseChipButtonStyle: ButtonStyle {
 }
 
 /// The primary action: an ink fill with inverse ink text. Never accent.
-struct HouseInkButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
+public struct HouseInkButtonStyle: ButtonStyle {
+    public init() {}
+
+    public func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(House.TypeToken.label)
             .foregroundStyle(House.ColorToken.textInverse)
@@ -323,10 +356,12 @@ struct HouseInkButtonStyle: ButtonStyle {
 }
 
 /// A quiet text action, for links and secondary verbs.
-struct HouseLinkButtonStyle: ButtonStyle {
-    var destructive = false
+public struct HouseLinkButtonStyle: ButtonStyle {
+    public var destructive = false
 
-    func makeBody(configuration: Configuration) -> some View {
+    public init(destructive: Bool = false) { self.destructive = destructive }
+
+    public func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(House.TypeToken.meta)
             .foregroundStyle(destructive ? House.ColorToken.danger : House.ColorToken.accent)
@@ -338,15 +373,20 @@ struct HouseLinkButtonStyle: ButtonStyle {
 // MARK: - Ink toggle
 
 /// The switch itself: ink when on, a quiet tile when off. Never blue.
-struct InkSwitch: View {
+public struct InkSwitch: View {
     @Binding var isOn: Bool
-    var enabled = true
+    public var enabled = true
 
     private static let trackWidth: CGFloat = 38
     private static let trackHeight: CGFloat = 22
     private static let knob: CGFloat = 16
 
-    var body: some View {
+    public init(isOn: Binding<Bool>, enabled: Bool = true) {
+        self._isOn = isOn
+        self.enabled = enabled
+    }
+
+    public var body: some View {
         Button {
             guard enabled else { return }
             isOn.toggle()
@@ -361,11 +401,16 @@ struct InkSwitch: View {
 }
 
 /// The switch's painted track, shared by `InkSwitch` and `InkToggleStyle`.
-struct InkSwitchTrack: View {
-    let isOn: Bool
-    var enabled = true
+public struct InkSwitchTrack: View {
+    public let isOn: Bool
+    public var enabled = true
 
-    var body: some View {
+    public init(isOn: Bool, enabled: Bool = true) {
+        self.isOn = isOn
+        self.enabled = enabled
+    }
+
+    public var body: some View {
         ZStack(alignment: isOn ? .trailing : .leading) {
             Capsule()
                 .fill(isOn ? House.ColorToken.textPrimary : House.ColorToken.tileFill)
@@ -387,8 +432,10 @@ struct InkSwitchTrack: View {
 }
 
 /// The house toggle style, for call sites that keep SwiftUI's `Toggle`.
-struct InkToggleStyle: ToggleStyle {
-    func makeBody(configuration: Configuration) -> some View {
+public struct InkToggleStyle: ToggleStyle {
+    public init() {}
+
+    public func makeBody(configuration: Configuration) -> some View {
         HStack(spacing: House.Spacing.sm) {
             configuration.label
                 .font(House.TypeToken.label)
@@ -400,8 +447,10 @@ struct InkToggleStyle: ToggleStyle {
 }
 
 /// A toggle for a capability the app cannot honour yet: shown, off, and inert.
-struct InertToggle: View {
-    var body: some View {
+public struct InertToggle: View {
+    public init() {}
+
+    public var body: some View {
         InkSwitchTrack(isOn: false, enabled: false)
     }
 }
@@ -411,15 +460,27 @@ struct InertToggle: View {
 /// A settings group: a card at `Radius.lg` on `surfaceRaised` with `stroke`
 /// and a 1 px top highlight. The uppercase `section` label is the card's first
 /// row, with an optional counter on the right, exactly as the mockup draws it.
-struct SlateCard<Content: View>: View {
-    var section: String?
+public struct SlateCard<Content: View>: View {
+    public var section: String?
     /// A short right-hand fact on the header row ("4 of 5 complete").
-    var counter: String?
+    public var counter: String?
     /// A full-width line of purpose under the header row.
-    var footnote: String?
-    @ViewBuilder var content: Content
+    public var footnote: String?
+    @ViewBuilder public var content: Content
 
-    var body: some View {
+    public init(
+        section: String? = nil,
+        counter: String? = nil,
+        footnote: String? = nil,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.section = section
+        self.counter = counter
+        self.footnote = footnote
+        self.content = content()
+    }
+
+    public var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             if let section {
                 HStack(spacing: House.Spacing.sm) {
@@ -470,13 +531,25 @@ struct SlateCard<Content: View>: View {
 
 /// One card row: `label` title, optional `meta` detail, trailing control.
 /// Rows are 38–48 high and split by `divider`.
-struct SlateRow<Trailing: View>: View {
-    var title: String?
-    var detail: String?
-    var minHeight: CGFloat = 44
-    @ViewBuilder var trailing: Trailing
+public struct SlateRow<Trailing: View>: View {
+    public var title: String?
+    public var detail: String?
+    public var minHeight: CGFloat = 44
+    @ViewBuilder public var trailing: Trailing
 
-    var body: some View {
+    public init(
+        title: String? = nil,
+        detail: String? = nil,
+        minHeight: CGFloat = 44,
+        @ViewBuilder trailing: () -> Trailing
+    ) {
+        self.title = title
+        self.detail = detail
+        self.minHeight = minHeight
+        self.trailing = trailing()
+    }
+
+    public var body: some View {
         HStack(alignment: .center, spacing: House.Spacing.sm) {
             if title != nil || detail != nil {
                 VStack(alignment: .leading, spacing: 2) {
@@ -504,16 +577,18 @@ struct SlateRow<Trailing: View>: View {
 }
 
 extension SlateRow where Trailing == EmptyView {
-    init(title: String? = nil, detail: String? = nil, minHeight: CGFloat = 44) {
+    public init(title: String? = nil, detail: String? = nil, minHeight: CGFloat = 44) {
         self.init(title: title, detail: detail, minHeight: minHeight) { EmptyView() }
     }
 }
 
 /// A free-form row: arbitrary content on the card's row grid.
-struct SlateBlock<Content: View>: View {
-    @ViewBuilder var content: Content
+public struct SlateBlock<Content: View>: View {
+    @ViewBuilder public var content: Content
 
-    var body: some View {
+    public init(@ViewBuilder content: () -> Content) { self.content = content() }
+
+    public var body: some View {
         VStack(alignment: .leading, spacing: House.Spacing.xs) {
             content
         }
@@ -525,10 +600,12 @@ struct SlateBlock<Content: View>: View {
 
 /// The line between rows. Quieter than the panel stroke, and inset to the
 /// card's horizontal padding so it reads as a row rule, not a panel edge.
-struct SlateDivider: View {
-    var inset: CGFloat = House.Spacing.md
+public struct SlateDivider: View {
+    public var inset: CGFloat = House.Spacing.md
 
-    var body: some View {
+    public init(inset: CGFloat = House.Spacing.md) { self.inset = inset }
+
+    public var body: some View {
         House.ColorToken.divider
             .frame(height: House.hairline)
             .padding(.horizontal, inset)
@@ -536,16 +613,16 @@ struct SlateDivider: View {
 }
 
 /// Prose inside a card, at `bodySmall` with the scale's line height.
-struct SlateProse: View {
-    let text: String
-    var tertiary = false
+public struct SlateProse: View {
+    public let text: String
+    public var tertiary = false
 
-    init(_ text: String, tertiary: Bool = false) {
+    public init(_ text: String, tertiary: Bool = false) {
         self.text = text
         self.tertiary = tertiary
     }
 
-    var body: some View {
+    public var body: some View {
         Text(text)
             .font(House.TypeToken.bodySmall)
             .foregroundStyle(tertiary ? House.ColorToken.textTertiary : House.ColorToken.textSecondary)
@@ -558,12 +635,18 @@ struct SlateProse: View {
 }
 
 /// A two-column identifier row: `meta` label left, `code` value right.
-struct SlateInfoRow: View {
-    var title: String
-    var value: String
-    var monospaced = false
+public struct SlateInfoRow: View {
+    public var title: String
+    public var value: String
+    public var monospaced = false
 
-    var body: some View {
+    public init(title: String, value: String, monospaced: Bool = false) {
+        self.title = title
+        self.value = value
+        self.monospaced = monospaced
+    }
+
+    public var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: House.Spacing.sm) {
             Text(title)
                 .font(House.TypeToken.meta)
@@ -583,11 +666,16 @@ struct SlateInfoRow: View {
 // MARK: - Pane header and footer
 
 /// The pane header: 60 high, `heading` title with a one-line `meta` purpose.
-struct PaneHeader: View {
-    let title: String
-    let purpose: String
+public struct PaneHeader: View {
+    public let title: String
+    public let purpose: String
 
-    var body: some View {
+    public init(title: String, purpose: String) {
+        self.title = title
+        self.purpose = purpose
+    }
+
+    public var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(title)
                 .font(House.TypeToken.heading)
@@ -604,12 +692,22 @@ struct PaneHeader: View {
 
 /// The footer well: a sunken bar with status on the left and the primary key
 /// hints on the right.
-struct FooterWell<Leading: View, Trailing: View>: View {
-    var height: CGFloat = House.Control.footer
-    @ViewBuilder var leading: Leading
-    @ViewBuilder var trailing: Trailing
+public struct FooterWell<Leading: View, Trailing: View>: View {
+    public var height: CGFloat = House.Control.footer
+    @ViewBuilder public var leading: Leading
+    @ViewBuilder public var trailing: Trailing
 
-    var body: some View {
+    public init(
+        height: CGFloat = House.Control.footer,
+        @ViewBuilder leading: () -> Leading,
+        @ViewBuilder trailing: () -> Trailing
+    ) {
+        self.height = height
+        self.leading = leading()
+        self.trailing = trailing()
+    }
+
+    public var body: some View {
         VStack(spacing: 0) {
             SlateDivider()
             HStack(spacing: House.Spacing.sm) {
@@ -626,11 +724,16 @@ struct FooterWell<Leading: View, Trailing: View>: View {
 }
 
 /// The footer's left half: a status dot and a line of context.
-struct FooterStatus: View {
-    let text: String
-    var tint: Color = House.ColorToken.success
+public struct FooterStatus: View {
+    public let text: String
+    public var tint: Color = House.ColorToken.success
 
-    var body: some View {
+    public init(text: String, tint: Color = House.ColorToken.success) {
+        self.text = text
+        self.tint = tint
+    }
+
+    public var body: some View {
         HStack(spacing: House.Spacing.xs) {
             StatusDot(tint: tint)
             Text(text)
@@ -646,16 +749,23 @@ struct FooterStatus: View {
 /// A settings rail row: a 24 px icon tile, a `label` title, and the section's
 /// key hint. Selected is a raised tile with an inset ring and a 1 px drop;
 /// hover is half the selection fill.
-struct RailRow: View {
-    let symbol: String
-    let title: String
-    let isSelected: Bool
-    let action: () -> Void
+public struct RailRow: View {
+    public let symbol: String
+    public let title: String
+    public let isSelected: Bool
+    public let action: () -> Void
 
     @State private var isHovering = false
     @Environment(\.colorScheme) private var scheme
 
-    var body: some View {
+    public init(symbol: String, title: String, isSelected: Bool, action: @escaping () -> Void) {
+        self.symbol = symbol
+        self.title = title
+        self.isSelected = isSelected
+        self.action = action
+    }
+
+    public var body: some View {
         Button(action: action) {
             HStack(spacing: House.Spacing.xs) {
                 IconTile(symbol: symbol, size: 24)
@@ -693,12 +803,18 @@ struct RailRow: View {
 }
 
 /// The rail's app mark: a 28 px tile plus the app name over a `section` label.
-struct AppMark: View {
-    let symbol: String
-    let name: String
-    let caption: String
+public struct AppMark: View {
+    public let symbol: String
+    public let name: String
+    public let caption: String
 
-    var body: some View {
+    public init(symbol: String, name: String, caption: String) {
+        self.symbol = symbol
+        self.name = name
+        self.caption = caption
+    }
+
+    public var body: some View {
         HStack(spacing: House.Spacing.xs) {
             RoundedRectangle(cornerRadius: House.Radius.md, style: .continuous)
                 .fill(House.ColorToken.textPrimary)
@@ -727,13 +843,18 @@ struct AppMark: View {
 /// The house segmented control. The system's `.segmented` picker paints the
 /// selected segment with the system accent (blue), which Slate forbids, so the
 /// selection is the same raised tile the rail uses.
-struct SlateSegmented<Value: Hashable>: View {
-    let options: [(value: Value, title: String)]
+public struct SlateSegmented<Value: Hashable>: View {
+    public let options: [(value: Value, title: String)]
     @Binding var selection: Value
 
     @Environment(\.colorScheme) private var scheme
 
-    var body: some View {
+    public init(options: [(value: Value, title: String)], selection: Binding<Value>) {
+        self.options = options
+        self._selection = selection
+    }
+
+    public var body: some View {
         HStack(spacing: 2) {
             ForEach(Array(options.enumerated()), id: \.offset) { _, option in
                 Button {
@@ -780,3 +901,5 @@ struct SlateSegmented<Value: Hashable>: View {
         }
     }
 }
+
+#endif

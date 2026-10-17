@@ -1,7 +1,3 @@
-// SHARED KIT, DO NOT EDIT. Source: design-system/kit/MenuBarPanel.swift.
-// Copy from design-system (`make sync-kit` there); `make check-consumers`
-// fails when a consumer's copy differs.
-//
 // The menu-bar panel plumbing every house menu-bar app shares, following the
 // "Menu bar panel" component in design-system/DESIGN.md: the action row, the
 // section label and note lines, and the NSPanel controller that hangs a 300 px
@@ -9,35 +5,69 @@
 // loss. An app owns its model, its panel view and its controller subclass, in
 // app-local files.
 
+#if canImport(AppKit)
 import AppKit
+import HouseDesign
 import SwiftUI
 
 /// One selectable row in the panel.
-struct PanelAction: Identifiable {
-    let id: String
-    let glyph: String
-    let title: String
+public struct PanelAction: Identifiable {
+    public let id: String
+    public let glyph: String
+    public let title: String
     /// The chord drawn as key caps on the right. Empty draws none.
-    var chord: String = ""
-    var isEnabled: Bool = true
+    public var chord: String = ""
+    public var isEnabled: Bool = true
     /// A rarer action, drawn at reduced ink in the second group.
-    var isQuiet: Bool = false
-    var run: () -> Void = {}
+    public var isQuiet: Bool = false
+    public var run: () -> Void = {}
+
+    public init(
+        id: String,
+        glyph: String,
+        title: String,
+        chord: String = "",
+        isEnabled: Bool = true,
+        isQuiet: Bool = false,
+        run: @escaping () -> Void = {}
+    ) {
+        self.id = id
+        self.glyph = glyph
+        self.title = title
+        self.chord = chord
+        self.isEnabled = isEnabled
+        self.isQuiet = isQuiet
+        self.run = run
+    }
 }
 
 /// One 36 px action row: a glyph, a `label` title, and outlined key caps.
 /// `glyphWidth` is the glyph's column; a panel whose other rows carry an icon
 /// tile passes `House.Control.tile` so the titles line up.
-struct PanelRow: View {
-    let action: PanelAction
-    let isSelected: Bool
-    let onHover: () -> Void
-    let onTap: () -> Void
-    var glyphWidth: CGFloat = 16
+public struct PanelRow: View {
+    public let action: PanelAction
+    public let isSelected: Bool
+    public let onHover: () -> Void
+    public let onTap: () -> Void
+    public var glyphWidth: CGFloat = 16
 
     @Environment(\.colorScheme) private var scheme
 
-    var body: some View {
+    public init(
+        action: PanelAction,
+        isSelected: Bool,
+        onHover: @escaping () -> Void,
+        onTap: @escaping () -> Void,
+        glyphWidth: CGFloat = 16
+    ) {
+        self.action = action
+        self.isSelected = isSelected
+        self.onHover = onHover
+        self.onTap = onTap
+        self.glyphWidth = glyphWidth
+    }
+
+    public var body: some View {
         Button(action: onTap) {
             HStack(spacing: House.Spacing.sm) {
                 Image(systemName: action.glyph)
@@ -88,11 +118,16 @@ struct PanelRow: View {
 }
 
 /// An uppercase `section` label inside the panel ("TODAY", "SUBSCRIPTIONS").
-struct PanelSectionLabel: View {
-    let text: String
-    var topPadding: CGFloat = House.Spacing.xs
+public struct PanelSectionLabel: View {
+    public let text: String
+    public var topPadding: CGFloat = House.Spacing.xs
 
-    var body: some View {
+    public init(text: String, topPadding: CGFloat = House.Spacing.xs) {
+        self.text = text
+        self.topPadding = topPadding
+    }
+
+    public var body: some View {
         Text(text.uppercased())
             .font(House.TypeToken.section)
             .tracking(House.TypeToken.Tracking.section)
@@ -106,12 +141,18 @@ struct PanelSectionLabel: View {
 
 /// A dim explanatory line inside the panel: "No hits", "3 more", or the reason
 /// a section could not be read.
-struct PanelNote: View {
-    let text: String
-    var danger = false
-    var verticalPadding: CGFloat = House.Spacing.xxs
+public struct PanelNote: View {
+    public let text: String
+    public var danger = false
+    public var verticalPadding: CGFloat = House.Spacing.xxs
 
-    var body: some View {
+    public init(text: String, danger: Bool = false, verticalPadding: CGFloat = House.Spacing.xxs) {
+        self.text = text
+        self.danger = danger
+        self.verticalPadding = verticalPadding
+    }
+
+    public var body: some View {
         Text(text)
             .font(House.TypeToken.meta)
             .foregroundStyle(danger ? House.ColorToken.danger : House.ColorToken.textTertiary)
@@ -127,19 +168,19 @@ struct PanelNote: View {
 
 /// A borderless panel that can take key focus, so arrows, Return and Escape
 /// drive it without a pointer, and inline fields can be typed into.
-final class KeyablePanel: NSPanel {
-    override var canBecomeKey: Bool { true }
-    override var canBecomeMain: Bool { false }
+public final class KeyablePanel: NSPanel {
+    public override var canBecomeKey: Bool { true }
+    public override var canBecomeMain: Bool { false }
 }
 
 /// The parts of a key-down the panel reads. `NSEvent` is not Sendable, so the
 /// monitor copies these out before it hops onto the main actor.
-struct KeyPress: Sendable {
-    let keyCode: UInt16
-    let flags: NSEvent.ModifierFlags
-    let characters: String?
+public struct PanelKeyPress: Sendable {
+    public let keyCode: UInt16
+    public let flags: NSEvent.ModifierFlags
+    public let characters: String?
 
-    init(_ event: NSEvent) {
+    public init(_ event: NSEvent) {
         keyCode = event.keyCode
         flags = event.modifierFlags
         characters = event.charactersIgnoringModifiers
@@ -148,7 +189,7 @@ struct KeyPress: Sendable {
 
 /// What the controller needs from an app's panel model.
 @MainActor
-protocol MenuPanelModeling: AnyObject {
+public protocol MenuPanelModeling: AnyObject {
     /// The controller sets this to close the panel.
     var onClose: () -> Void { get set }
     func moveSelection(by delta: Int)
@@ -162,30 +203,30 @@ protocol MenuPanelModeling: AnyObject {
 /// model on open (`panelWillShow`), release it on close (`panelDidClose`), and
 /// add its own keys (`handle`, falling back to `super`).
 @MainActor
-class MenuPanelController<Content: View, Model: MenuPanelModeling> {
-    let model: Model
+open class MenuPanelController<Content: View, Model: MenuPanelModeling> {
+    public let model: Model
 
-    private(set) var panel: KeyablePanel?
-    private(set) var hosting: NSHostingView<Content>?
+    public private(set) var panel: KeyablePanel?
+    public private(set) var hosting: NSHostingView<Content>?
     private let width: CGFloat
     private let makeRootView: () -> Content
     private var keyMonitor: Any?
     private var resignObserver: NSObjectProtocol?
 
-    var isVisible: Bool { panel?.isVisible ?? false }
+    public var isVisible: Bool { panel?.isVisible ?? false }
 
-    init(model: Model, width: CGFloat, rootView: @escaping () -> Content) {
+    public init(model: Model, width: CGFloat, rootView: @escaping () -> Content) {
         self.model = model
         self.width = width
         self.makeRootView = rootView
         model.onClose = { [weak self] in self?.close() }
     }
 
-    func toggle(relativeTo button: NSStatusBarButton?) {
+    public func toggle(relativeTo button: NSStatusBarButton?) {
         if isVisible { close() } else { show(relativeTo: button) }
     }
 
-    func show(relativeTo button: NSStatusBarButton?) {
+    public func show(relativeTo button: NSStatusBarButton?) {
         let panel = self.panel ?? makePanel()
         self.panel = panel
         panelWillShow()
@@ -202,7 +243,7 @@ class MenuPanelController<Content: View, Model: MenuPanelModeling> {
         observeResign(panel)
     }
 
-    func close() {
+    public func close() {
         stopKeyMonitor()
         if let resignObserver {
             NotificationCenter.default.removeObserver(resignObserver)
@@ -214,15 +255,15 @@ class MenuPanelController<Content: View, Model: MenuPanelModeling> {
 
     /// Runs once the window exists, before it is sized and shown: reset the
     /// model for a fresh open.
-    func panelWillShow() {}
+    open func panelWillShow() {}
 
     /// Runs once the key monitor and focus observer are gone, before the
     /// window hides.
-    func panelDidClose() {}
+    open func panelDidClose() {}
 
     /// Arrows and Return drive the rows; Escape goes to the model. True when
     /// the key was handled and must not reach the focused view.
-    func handle(_ key: KeyPress) -> Bool {
+    open func handle(_ key: PanelKeyPress) -> Bool {
         switch key.keyCode {
         case 125: // down
             model.moveSelection(by: 1)
@@ -265,7 +306,7 @@ class MenuPanelController<Content: View, Model: MenuPanelModeling> {
     }
 
     /// Anchor under the status item, clamped to the screen.
-    func anchorFrame(for button: NSStatusBarButton?, size: NSSize) -> NSPoint? {
+    public func anchorFrame(for button: NSStatusBarButton?, size: NSSize) -> NSPoint? {
         guard let button, let window = button.window else { return nil }
         let inScreen = window.convertToScreen(button.convert(button.bounds, to: nil))
         let screen = NSScreen.screens.first(where: { $0.frame.intersects(inScreen) }) ?? NSScreen.main
@@ -285,7 +326,7 @@ class MenuPanelController<Content: View, Model: MenuPanelModeling> {
         // itself stays in the monitor, which returns it or swallows it.
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self, self.isVisible else { return event }
-            let key = KeyPress(event)
+            let key = PanelKeyPress(event)
             let consumed = MainActor.assumeIsolated { self.handle(key) }
             return consumed ? nil : event
         }
@@ -305,3 +346,5 @@ class MenuPanelController<Content: View, Model: MenuPanelModeling> {
         }
     }
 }
+
+#endif

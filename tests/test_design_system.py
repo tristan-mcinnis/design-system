@@ -21,9 +21,19 @@ class Generators(unittest.TestCase):
         a, b = run("gen/gen-swift.py"), run("gen/gen-swift.py")
         self.assertEqual(a, b)
         self.assertTrue(a.startswith(f"// GENERATED from design-system/tokens.json {common.tokens_sha()}; do not edit"))
-        self.assertIn("enum House {", a)
+        self.assertIn("public enum House {", a)
         for name in common.load_tokens()["color"]:
-            self.assertIn(f"static let {name} = adaptive(", a)
+            self.assertIn(f"public static let {name} = adaptive(", a)
+
+    def test_swift_declarations_are_public_except_the_adaptive_helpers(self):
+        a = run("gen/gen-swift.py")
+        for line in a.splitlines():
+            stripped = line.strip()
+            if stripped.startswith(("enum ", "struct ", "static let ", "let ")):
+                self.fail(f"internal declaration in generated module: {stripped}")
+        self.assertIn("public struct ShadowSpec: Sendable {", a)
+        self.assertEqual(a.count("static func adaptive("), 2)
+        self.assertNotIn("public static func adaptive", a)
 
     def test_swift_compiles_for_appkit_and_uikit(self):
         """One generated file serves macOS (NSColor) and iOS (UIColor)."""
@@ -87,46 +97,112 @@ class Contrast(unittest.TestCase):
         self.assertGreaterEqual(contrast(c["hudText"]["light"], c["hudFill"]["light"]), 4.5)
 
 
-class Kit(unittest.TestCase):
-    """The hand-written menu-bar kit is copied byte for byte; drift fails."""
+PACKAGE_SWIFT = """// swift-tools-version: 5.10
+import PackageDescription
+let package = Package(name: "App", dependencies: [
+    .package(url: "https://github.com/tristan-mcinnis/design-system", from: "1.0.0"),
+    .package(url: "https://github.com/tristan-mcinnis/house-chat-core", from: "1.0.0"),
+])
+"""
+PROJECT_YML = """packages:
+  HouseDesign:
+    url: https://github.com/tristan-mcinnis/design-system
+    from: "1.0.0"
+  HouseChatCore:
+    url: https://github.com/tristan-mcinnis/house-chat-core
+    from: "1.0.0"
+  Yams:
+    url: https://github.com/jpsim/Yams
+    from: "5.1.0"
+"""
+MANIFESTS = {
+    "quick-launch/Package.swift": PACKAGE_SWIFT,
+    "rti/RTI/project.yml": PROJECT_YML,
+    "cotype/Package.swift": PACKAGE_SWIFT,
+    "memory-menubar/Package.swift": PACKAGE_SWIFT,
+    "usage-menubar/Package.swift": PACKAGE_SWIFT,
+    "local-models/menubar/LocalModelsBar/Package.swift": PACKAGE_SWIFT,
+}
 
-    FILES = ("HouseUI.swift", "MenuBarPanel.swift")
-    APPS = (
-        "cotype/Sources/CotypeMenuApp",
-        "memory-menubar/Sources/MemoryBar",
-        "usage-menubar/Sources/UsageBar",
-        "local-models/menubar/LocalModelsBar/Sources/LocalModelsBar",
-    )
 
-    def make(self, house, *targets):
-        env = {**os.environ, "HOUSE_ALLOW_MISSING": "1"}
-        return subprocess.run(["make", "--no-print-directory", f"HOUSE={house}", *targets],
-                              cwd=ROOT, capture_output=True, text=True, env=env)
+class ConsumerPins(unittest.TestCase):
+    """Apps pin the Swift packages by GitHub URL and tag; copies and path
+    dependencies fail. The Rust token file is still compared byte for byte."""
 
-    def test_kit_files_say_where_they_come_from(self):
-        for name in self.FILES:
-            head = (ROOT / "kit" / name).read_text().splitlines()[0]
-            self.assertTrue(head.startswith("// SHARED KIT, DO NOT EDIT. Source: design-system/kit/"), name)
+    def setUp(self):
+        self.house = Path(tempfile.mkdtemp()).resolve()
+        for rel, text in MANIFESTS.items():
+            path = self.house / rel
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text)
+        rust = self.house / "local-dictation/src/menubar/house_theme.rs"
+        rust.parent.mkdir(parents=True)
+        rust.write_bytes((ROOT / "generated/house_theme.rs").read_bytes())
 
-    def test_sync_then_check_is_green_and_drift_is_red(self):
-        house = Path(tempfile.mkdtemp())
-        try:
-            for app in self.APPS:
-                (house / app).mkdir(parents=True)
-            synced = self.make(house, "sync-kit")
-            self.assertEqual(synced.returncode, 0, synced.stderr)
-            green = self.make(house, "check-consumers")
-            self.assertEqual(green.returncode, 0, green.stdout)
-            for app in self.APPS:
-                for name in self.FILES:
-                    self.assertEqual((house / app / name).read_bytes(), (ROOT / "kit" / name).read_bytes())
-            drifted = house / self.APPS[2] / "MenuBarPanel.swift"
-            drifted.write_text(drifted.read_text() + "\n// local tweak\n")
-            red = self.make(house, "check-consumers")
-            self.assertNotEqual(red.returncode, 0)
-            self.assertIn(f"DRIFT: {drifted}", red.stdout)
-        finally:
-            shutil.rmtree(house)
+    def tearDown(self):
+        shutil.rmtree(self.house)
+
+    def check(self, *flags):
+        env = {k: v for k, v in os.environ.items() if k != "HOUSE_ALLOW_MISSING"}
+        return subprocess.run([sys.executable, str(ROOT / "bin/check-consumers"), "--house", str(self.house), *flags],
+                              capture_output=True, text=True, env=env)
+
+    def edit(self, rel, old, new):
+        path = self.house / rel
+        path.write_text(path.read_text().replace(old, new))
+
+    def test_pinned_consumers_are_green(self):
+        run = self.check()
+        self.assertEqual(run.returncode, 0, run.stdout)
+        self.assertIn("pins design-system from 1.0.0", run.stdout)
+
+    def test_relative_path_dependency_is_red(self):
+        self.edit("cotype/Package.swift",
+                  '.package(url: "https://github.com/tristan-mcinnis/design-system", from: "1.0.0")',
+                  '.package(path: "../design-system")')
+        run = self.check()
+        self.assertNotEqual(run.returncode, 0)
+        self.assertIn("UNPINNED", run.stdout)
+
+    def test_branch_pin_is_red(self):
+        self.edit("usage-menubar/Package.swift", '.package(url: "https://github.com/tristan-mcinnis/design-system", from: "1.0.0")',
+                  '.package(url: "https://github.com/tristan-mcinnis/design-system", branch: "main")')
+        run = self.check()
+        self.assertNotEqual(run.returncode, 0)
+        self.assertIn("without a semver tag requirement", run.stdout)
+
+    def test_missing_pin_in_project_yml_is_red(self):
+        self.edit("rti/RTI/project.yml", 'url: https://github.com/tristan-mcinnis/house-chat-core\n    from: "1.0.0"',
+                  "path: ../../house-chat-core")
+        run = self.check()
+        self.assertNotEqual(run.returncode, 0)
+        self.assertIn("rti/RTI/project.yml does not depend on house-chat-core", run.stdout)
+
+    def test_copied_source_file_is_red(self):
+        copy = self.house / "memory-menubar/Sources/MemoryBar/HouseUI.swift"
+        copy.parent.mkdir(parents=True)
+        copy.write_text("// copy\n")
+        run = self.check()
+        self.assertNotEqual(run.returncode, 0)
+        self.assertIn(f"COPY: {copy}", run.stdout)
+
+    def test_build_directories_are_not_scanned(self):
+        built = self.house / "cotype/.build/checkouts/design-system/Sources/HouseDesign/HouseDesign.swift"
+        built.parent.mkdir(parents=True)
+        built.write_text("// checkout\n")
+        self.assertEqual(self.check().returncode, 0)
+
+    def test_rust_drift_is_red(self):
+        rust = self.house / "local-dictation/src/menubar/house_theme.rs"
+        rust.write_text(rust.read_text() + "\n// local tweak\n")
+        run = self.check()
+        self.assertNotEqual(run.returncode, 0)
+        self.assertIn(f"DRIFT: {rust}", run.stdout)
+
+    def test_absent_consumer_fails_unless_allowed(self):
+        shutil.rmtree(self.house / "quick-launch")
+        self.assertNotEqual(self.check().returncode, 0)
+        self.assertEqual(self.check("--allow-missing").returncode, 0)
 
 
 def glyph_names():

@@ -1,0 +1,158 @@
+#!/usr/bin/env python3
+"""check-consumers - every house app pins the shared Swift packages by tag.
+
+    bin/check-consumers [--house DIR] [--allow-missing]
+
+For each consuming repo (folder names under the house directory) this checks:
+
+  1. its manifest depends on the package by GitHub URL with a semver `from:`
+     or `exactVersion:` requirement, never by a relative path or a branch;
+  2. no copy of the package's sources is left in the repo;
+  3. when this repo carries tags, the pin is not newer than the newest tag.
+
+It also keeps the one remaining generated copy honest: the Rust token file in
+local-dictation must equal generated/house_theme.rs byte for byte.
+
+A consumer that is not cloned next to this repo fails, unless --allow-missing
+or HOUSE_ALLOW_MISSING=1 (a standalone checkout). Folder names are used, not
+GitHub names (rti-personal is ../rti).
+"""
+from __future__ import annotations
+
+import argparse
+import os
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+
+DESIGN_URL = "github.com/tristan-mcinnis/design-system"
+CHAT_URL = "github.com/tristan-mcinnis/house-chat-core"
+
+CONSUMERS = [
+    ("quick-launch", "Package.swift", (DESIGN_URL, CHAT_URL)),
+    ("rti", "RTI/project.yml", (DESIGN_URL, CHAT_URL)),
+    ("cotype", "Package.swift", (DESIGN_URL,)),
+    ("memory-menubar", "Package.swift", (DESIGN_URL,)),
+    ("usage-menubar", "Package.swift", (DESIGN_URL,)),
+    ("local-models", "menubar/LocalModelsBar/Package.swift", (DESIGN_URL,)),
+]
+
+COPIED_NAMES = {
+    DESIGN_URL: ("HouseDesign.swift", "HouseUI.swift", "MenuBarPanel.swift"),
+    CHAT_URL: (),
+}
+SKIP = {".build", ".git", ".swiftpm", "DerivedData", "SourcePackages", "node_modules", "dist", "build"}
+SKIP_PREFIX = (".deriveddata", ".build")
+
+RUST_COPY = ("local-dictation", "src/menubar/house_theme.rs", "generated/house_theme.rs")
+SEMVER = re.compile(r"^\d+\.\d+\.\d+$")
+
+
+def semver(text: str):
+    return tuple(int(p) for p in text.split("."))
+
+
+def pins(manifest: str, url: str):
+    """Version requirements declared for `url`, or None when it is not used.
+
+    Handles Package.swift (`.package(url: "...", from: "1.0.0")`) and an
+    xcodegen project.yml (`url: ...` followed by `from: "1.0.0"`).
+    """
+    found = []
+    for m in re.finditer(r"url:\s*[\"']?https://" + re.escape(url) + r"(?:\.git)?[\"']?", manifest):
+        tail = manifest[m.end(): m.end() + 200]
+        tail = re.split(r"\.package\(|\n\s*\w[\w-]*:\s*\n|\n\S", tail)[0]
+        req = re.search(r"\b(from|exactVersion|exact|minVersion)\s*:\s*[\"']([^\"']+)[\"']", tail)
+        found.append((req.group(1), req.group(2)) if req else None)
+    return found or None
+
+
+def stray_copies(repo: Path, names):
+    hits = []
+    for dirpath, dirnames, filenames in os.walk(repo):
+        dirnames[:] = [d for d in dirnames if d not in SKIP and not d.lower().startswith(SKIP_PREFIX)]
+        for n in filenames:
+            if n in names:
+                hits.append(Path(dirpath) / n)
+    return hits
+
+
+def latest_tag(repo: Path):
+    out = subprocess.run(["git", "-C", str(repo), "tag", "--list", "v[0-9]*"],
+                         capture_output=True, text=True)
+    tags = [t[1:] for t in out.stdout.split() if SEMVER.match(t[1:])]
+    return max(tags, key=semver) if tags else None
+
+
+def check(house: Path, allow_missing: bool):
+    bad = []
+    tag = latest_tag(ROOT)
+    for repo, rel, urls in CONSUMERS:
+        manifest = house / repo / rel
+        if not manifest.is_file():
+            if allow_missing:
+                print(f"skip (absent, allowed): {manifest}")
+            else:
+                print(f"MISSING: {manifest} (clone the sibling repo next to design-system, "
+                      "or set HOUSE_ALLOW_MISSING=1 for a standalone check)")
+                bad.append(str(manifest))
+            continue
+        text = manifest.read_text()
+        for url in urls:
+            name = url.rsplit("/", 1)[1]
+            declared = pins(text, url)
+            if declared is None:
+                print(f"UNPINNED: {manifest} does not depend on {name} by GitHub URL")
+                bad.append(f"{repo}:{name}")
+                continue
+            for req in declared:
+                if req is None or not SEMVER.match(req[1]):
+                    print(f"UNPINNED: {manifest} pins {name} without a semver tag requirement")
+                    bad.append(f"{repo}:{name}")
+                elif name == "design-system" and tag and semver(req[1]) > semver(tag):
+                    print(f"AHEAD: {manifest} pins {name} {req[1]}, newest tag is v{tag}")
+                    bad.append(f"{repo}:{name}")
+                else:
+                    print(f"ok: {manifest} pins {name} {req[0]} {req[1]}")
+            for suffix in (f"../{name}", f"../../{name}"):
+                if re.search(r"path:\s*[\"']?" + re.escape(suffix), text):
+                    print(f"PATH-DEP: {manifest} still depends on {name} by relative path")
+                    bad.append(f"{repo}:{name}")
+            for copy in stray_copies(house / repo, COPIED_NAMES[url]):
+                print(f"COPY: {copy} duplicates the {name} package")
+                bad.append(str(copy))
+
+    repo, rel, src = RUST_COPY
+    dest = house / repo / rel
+    if not dest.is_file():
+        if allow_missing:
+            print(f"skip (absent, allowed): {dest}")
+        else:
+            print(f"MISSING: {dest}")
+            bad.append(str(dest))
+    elif (ROOT / src).read_bytes() == dest.read_bytes():
+        print(f"ok: {dest}")
+    else:
+        print(f"DRIFT: {dest}")
+        bad.append(str(dest))
+
+    if bad:
+        print("check-consumers failed")
+        return 1
+    return 0
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--house", default=os.environ.get("HOUSE", str(ROOT.parent)))
+    ap.add_argument("--allow-missing", action="store_true")
+    a = ap.parse_args()
+    allow = a.allow_missing or os.environ.get("HOUSE_ALLOW_MISSING", "0") not in ("0", "")
+    sys.exit(check(Path(a.house).resolve(), allow))
+
+
+if __name__ == "__main__":
+    main()

@@ -320,7 +320,7 @@ header, thread, and composer grammar for the parts where a person asks.
 
 ## Adopting in an existing app
 
-1. Regenerate and recopy `HouseDesign.swift` (`make gen`). Add the three derived fonts and proseLineSpacing.
+1. Import `HouseDesign` from the design-system package (a tag with the three derived fonts and proseLineSpacing). Add them to tokens.json and run `make gen` here first if the pinned tag lacks them.
 2. Copy `SlateChrome.swift` primitives: `KeyCap`, `KeyCapGroup`, `KeyHint`, `SectionLabel`, `HouseChip`, `RowHighlight`, `raisedCard`, `panelGlass`, `houseShadow`, `panelShadows`, `HouseDivider`, `InkButtonStyle`.
 3. Copy the views in the order header, thread, composer, then chips, rail, and find. Keep the view names, so a grep finds each copy.
 4. Put a small adapter between the app's view model and the views' reads (messages, `isStreaming`, `output`, `threadError`, composer action, placeholder), and do not rename them inside the views.
