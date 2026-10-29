@@ -611,13 +611,20 @@
       "purpose": "Read a meeting as it happens: who said what, calm enough to glance at mid-call.",
       "section": "Shared components",
       "spec": [
-        "no box or chip per speaker; a run of one speaker carries one label line: a 6 px speaker-palette dot, the name in `meta` medium `textSecondary`, the time in `caption` `textTertiary`",
-        "the mic wearer's runs sit on the right as a `chipFill` bubble at `Radius.pill` in `bodySmall` `textPrimary`, inset `Spacing.xxxxl` from the left; everyone else is plain `bodySmall` text on the left capped at `Layout.answerMaxWidth`",
-        "speaker labels come from the speaker id and never change mid-meeting (You, Speaker N, Room speaker N); a click names the speaker, offering the confirmed meeting's invitees first",
-        "interim words follow the final words in `textTertiary` in the run they belong to, so a final result recolours them in place",
-        "a long run breaks into paragraphs `Spacing.sm` apart at sentence ends; a break never moves once made, and interim words join only the open paragraph",
-        "runs `Spacing.lg` apart; a note is a glyph label over `textSecondary` text; the list follows the latest line until the user scrolls up, then a `Control.chip` capsule on `surfaceRaised` offers Jump to latest",
-        "archived transcripts in the Session browser use the same label line, once per run of one speaker, with the dot colour the live view gave that speaker"
+        "one left reading column for every speaker, the mic wearer included, with no box, bubble or dot",
+        "a turn (consecutive lines of one speaker, until another speaker, a note or 30 s of silence) carries one label line: the name in `label` semibold in the speaker's palette colour, the time in `meta` `textTertiary` at the right edge of the reading width",
+        "the text is `body` in `textPrimary` with `Spacing.xxs` between lines, capped at `Layout.answerMaxWidth`",
+        "turns `Spacing.lg` apart, label to text `Spacing.xxs`",
+        "speaker labels come from the speaker id and never change mid-meeting (You, Speaker N, Room speaker N)",
+        "a click names the speaker, offering the confirmed meeting's invitees first",
+        "the mic's echo of the system leg is never shown",
+        "interim words follow the final words in `textTertiary` in the turn they belong to, so a final result recolours them in place",
+        "a long turn breaks into paragraphs `Spacing.sm` apart at sentence ends",
+        "a break never moves once made, and interim words join only the open paragraph",
+        "lines leaving the top fade over `Spacing.lg`",
+        "a note is a glyph label over `textSecondary` text",
+        "the list follows the latest line until the user scrolls up, then a `Control.chip` capsule on `surfaceRaised` offers Jump to latest",
+        "archived transcripts in the Session browser keep a dot-and-name label line, once per run of one speaker, with the dot colour the live view gives that speaker"
       ],
       "implements": [
         {
