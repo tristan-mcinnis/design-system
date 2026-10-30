@@ -460,6 +460,8 @@ public struct InertToggle: View {
 /// A settings group: a card at `Radius.lg` on `surfaceRaised` with `stroke`
 /// and a 1 px top highlight. The uppercase `section` label is the card's first
 /// row, with an optional counter on the right, exactly as the mockup draws it.
+/// That header row is part of the card (`sm` above the label, `xs` below,
+/// then a divider), so the form table's label-to-card gap does not apply.
 public struct SlateCard<Content: View>: View {
     public var section: String?
     /// A short right-hand fact on the header row ("4 of 5 complete").
@@ -582,19 +584,106 @@ extension SlateRow where Trailing == EmptyView {
     }
 }
 
-/// A free-form row: arbitrary content on the card's row grid.
+/// A free-form row: arbitrary content on the card's row grid. Children sit
+/// `spacing` apart: `xs` by default, `lg` for a stack of `SlateField`s.
 public struct SlateBlock<Content: View>: View {
+    public var spacing: CGFloat
     @ViewBuilder public var content: Content
 
-    public init(@ViewBuilder content: () -> Content) { self.content = content() }
+    public init(spacing: CGFloat = House.Spacing.xs, @ViewBuilder content: () -> Content) {
+        self.spacing = spacing
+        self.content = content()
+    }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: House.Spacing.xs) {
+        VStack(alignment: .leading, spacing: spacing) {
             content
         }
         .padding(.horizontal, House.Spacing.md)
         .padding(.vertical, House.Spacing.sm)
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// A form field: label `xs` above the control, helper or error `xxs` below
+/// it (docs/form-spacing.md). An absent label or helper adds no gap.
+public struct SlateField<Label: View, Control: View, Helper: View>: View {
+    @ViewBuilder public var label: Label
+    @ViewBuilder public var control: Control
+    @ViewBuilder public var helper: Helper
+
+    public init(
+        @ViewBuilder label: () -> Label,
+        @ViewBuilder control: () -> Control,
+        @ViewBuilder helper: () -> Helper
+    ) {
+        self.label = label()
+        self.control = control()
+        self.helper = helper()
+    }
+
+    public var body: some View {
+        VStack(alignment: .leading, spacing: House.Spacing.xs) {
+            label
+            VStack(alignment: .leading, spacing: House.Spacing.xxs) {
+                control
+                helper
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+extension SlateField where Helper == EmptyView {
+    public init(@ViewBuilder label: () -> Label, @ViewBuilder control: () -> Control) {
+        self.init(label: label, control: control) { EmptyView() }
+    }
+}
+
+extension SlateField where Label == Text? {
+    /// A `label` text title over the control.
+    public init(
+        label: String?,
+        @ViewBuilder control: () -> Control,
+        @ViewBuilder helper: () -> Helper
+    ) {
+        self.init(label: {
+            label.map {
+                Text($0)
+                    .font(House.TypeToken.label)
+                    .foregroundStyle(House.ColorToken.textPrimary)
+            }
+        }, control: control, helper: helper)
+    }
+}
+
+extension SlateField where Label == Text?, Helper == EmptyView {
+    public init(label: String?, @ViewBuilder control: () -> Control) {
+        self.init(label: label, control: control) { EmptyView() }
+    }
+}
+
+/// Fields `lg` apart with an action row `xl` below the last one and its
+/// buttons `xs` apart, on the card's row grid. Without actions, use
+/// `SlateBlock(spacing: House.Spacing.lg)`: an empty action row still takes the gap.
+public struct SlateFormBlock<Fields: View, Actions: View>: View {
+    @ViewBuilder public var fields: Fields
+    @ViewBuilder public var actions: Actions
+
+    public init(@ViewBuilder fields: () -> Fields, @ViewBuilder actions: () -> Actions) {
+        self.fields = fields()
+        self.actions = actions()
+    }
+
+    public var body: some View {
+        SlateBlock(spacing: House.Spacing.xl) {
+            VStack(alignment: .leading, spacing: House.Spacing.lg) {
+                fields
+            }
+            HStack(spacing: House.Spacing.xs) {
+                actions
+            }
+        }
     }
 }
 
@@ -665,7 +754,8 @@ public struct SlateInfoRow: View {
 
 // MARK: - Pane header and footer
 
-/// The pane header: 60 high, `heading` title with a one-line `meta` purpose.
+/// The pane header: 60 high, `heading` title `xs` over a one-line `meta`
+/// purpose, inset `xxl` like the pane content (docs/form-spacing.md).
 public struct PaneHeader: View {
     public let title: String
     public let purpose: String
@@ -676,7 +766,7 @@ public struct PaneHeader: View {
     }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: House.Spacing.xs) {
             Text(title)
                 .font(House.TypeToken.heading)
                 .foregroundStyle(House.ColorToken.textPrimary)
@@ -686,7 +776,7 @@ public struct PaneHeader: View {
                 .lineLimit(1)
         }
         .frame(maxWidth: .infinity, minHeight: 60, alignment: .leading)
-        .padding(.horizontal, House.Spacing.lg)
+        .padding(.horizontal, House.Spacing.xxl)
     }
 }
 

@@ -43,6 +43,51 @@ final class HouseUIKitTests: XCTestCase {
         XCTAssertGreaterThan(fittingSize(card).height, 0)
     }
 
+    // Form spacing (docs/form-spacing.md): label 8 control 4 helper; fields
+    // 20 apart; the action row 24 below the last field; buttons 8 apart.
+    func testFieldPutsLabelEightAboveAndHelperFourBelowTheControl() {
+        let field = SlateField {
+            Color.clear.frame(width: 10, height: 10)
+        } control: {
+            Color.clear.frame(width: 10, height: 20)
+        } helper: {
+            Color.clear.frame(width: 10, height: 6)
+        }
+        XCTAssertEqual(fittingSize(field).height, 10 + House.Spacing.xs + 20 + House.Spacing.xxs + 6, accuracy: 0.5)
+    }
+
+    func testFieldWithoutLabelOrHelperAddsNoGap() {
+        let field = SlateField(label: nil) { Color.clear.frame(width: 10, height: 20) }
+        XCTAssertEqual(fittingSize(field).height, 20, accuracy: 0.5)
+    }
+
+    func testBlockDefaultsToEightAndTakesAnotherGap() {
+        let pad = House.Spacing.sm * 2
+        let tight = SlateBlock {
+            Color.clear.frame(width: 10, height: 10)
+            Color.clear.frame(width: 10, height: 10)
+        }
+        XCTAssertEqual(fittingSize(tight).height, pad + 20 + House.Spacing.xs, accuracy: 0.5)
+        let fields = SlateBlock(spacing: House.Spacing.lg) {
+            Color.clear.frame(width: 10, height: 10)
+            Color.clear.frame(width: 10, height: 10)
+        }
+        XCTAssertEqual(fittingSize(fields).height, pad + 20 + House.Spacing.lg, accuracy: 0.5)
+    }
+
+    func testFormBlockSpacesFieldsAndPutsActionsTwentyFourBelow() {
+        let block = SlateFormBlock {
+            Color.clear.frame(width: 10, height: 10)
+            Color.clear.frame(width: 10, height: 10)
+        } actions: {
+            Color.clear.frame(width: 30, height: 12)
+            Color.clear.frame(width: 30, height: 12)
+        }
+        let size = fittingSize(block)
+        XCTAssertEqual(size.height, House.Spacing.sm * 2 + 20 + House.Spacing.lg + House.Spacing.xl + 12, accuracy: 0.5)
+        XCTAssertGreaterThanOrEqual(size.width, House.Spacing.md * 2 + 60 + House.Spacing.xs - 0.5)
+    }
+
     func testSegmentedControlBindsSelection() {
         var selection = 1
         let binding = Binding(get: { selection }, set: { selection = $0 })

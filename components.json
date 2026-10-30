@@ -137,8 +137,8 @@
       "section": "Shared components",
       "spec": [
         "220 px rail on `surfaceSunken` with 36 px rows, the selected row a raised tile",
-        "pane title in `title` with a `meta` subtitle",
-        "groups as cards at `Radius.lg` with an uppercase `section` label and 40 px rows",
+        "pane title in `heading` `xs` over a `meta` subtitle, inset `xxl` like the pane",
+        "groups as cards at `Radius.lg`, `xl` apart, the uppercase `section` label the card's own header row (`sm` above, `xs` below, then a divider, so the form table's label-to-card gap does not apply) over 40 px rows",
         "ink toggles",
         "footer well with the hint on the left and the primary key on the right"
       ],
