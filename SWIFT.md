@@ -20,7 +20,7 @@ looks; this file says how its Swift is written, tested, and built. Rust apps
 | --- | --- | --- | --- | --- |
 | quick-launch | macOS 26 | 6.2 | Swift Testing | The reference repo. |
 | rti | macOS 14 | Xcode, Swift 6.0 | XCTest | Highest legacy count (DispatchQueue, `nonisolated(unsafe)`). |
-| cotype, memory-menubar, usage-menubar, memory-screenctx, local-models | macOS 14 | 5.10 | XCTest | Hold at floor; migrate as a unit, not per file. |
+| cotype, usage-menubar, local-models | macOS 14 | 5.10 | XCTest | Hold at floor; migrate as a unit, not per file. |
 | memory-recall | macOS 14 | 5.9 | XCTest | Same hold; the one repo below 5.10. |
 | a new app | macOS 26, or iOS 26 | 6.2, `swiftLanguageMode(.v6)` | Swift Testing | Starts on the rule from day one. |
 
