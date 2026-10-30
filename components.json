@@ -644,6 +644,31 @@
         }
       ],
       "qualifier": "RTI"
+    },
+    {
+      "key": "main-workspace",
+      "name": "Main workspace",
+      "purpose": "Keep an app’s primary tasks and saved records reachable in one main window.",
+      "section": "Shared components",
+      "spec": [
+        "a persistent header carries the current capture status and recording controls above a labelled navigation row using existing ink selection and spacing tokens",
+        "Live, Sessions, Chats and Settings replace content in the same window; each remains reachable from every page, including an empty or unavailable library",
+        "switching pages keeps the live composer, selected record and settings navigation; hidden content is excluded from keyboard input and accessibility; closing the window leaves capture running",
+        "the window rules and release checks are in `docs/window-navigation.md`; transient launchers and dictation pills keep their separate task roles"
+      ],
+      "implements": [
+        {
+          "repo": "rti",
+          "path": "RTI/Sources/UI/Workspace/WorkspaceView.swift"
+        }
+      ],
+      "mockup": "Modernize HouseDesign system (direction 1b, Slate)",
+      "proof": [
+        {
+          "repo": "rti",
+          "path": "RTI/RenderTests/WorkspaceRenderProofTests.swift"
+        }
+      ]
     }
   ]
 }
