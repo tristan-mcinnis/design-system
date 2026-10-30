@@ -654,7 +654,9 @@
         "a persistent header carries the current capture status and recording controls above a labelled navigation row using existing ink selection and spacing tokens",
         "Live, Sessions, Chats and Settings replace content in the same window; each remains reachable from every page, including an empty or unavailable library",
         "switching pages keeps the live composer, selected record and settings navigation; hidden content is excluded from keyboard input and accessibility; closing the window leaves capture running",
-        "the window rules and release checks are in `docs/window-navigation.md`; transient launchers and dictation pills keep their separate task roles"
+        "the window rules and release checks are in `docs/window-navigation.md`; transient launchers and dictation pills keep their separate task roles",
+        "the unified window opens at chatWidth by chatHeight plus Control.row, with a shared minimum of chatMinWidth by chatMinHeight plus Control.row; page changes preserve the frame",
+        "tonal depth uses surfaceSunken chrome and rails, a surface workspace gutter, and surfaceRaised reading panels and settings cards with the existing card shadow and top highlight; primary navigation has a raised active tab"
       ],
       "implements": [
         {
