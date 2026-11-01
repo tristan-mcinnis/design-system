@@ -4,6 +4,8 @@
 under 120 lines); the code rule is `SWIFT.md` (concurrency, tests, platform
 floors, iOS). `tokens.json` is the only place a value is typed by hand.
 
+Build and test: `make build`, `make test`; warnings are errors.
+
 - Change a value: edit `tokens.json`, run `make gen`, run `make test` (and `make family-check` with the siblings cloned). `Sources/HouseDesign/HouseDesign.swift` is the generated Swift module; `generated/house_theme.rs` is the generated Rust copy that local-dictation still carries (copy it there and commit). Then release: tag `vX.Y.Z` (patch for a value or fix, minor for new public API, major for a removed or renamed public symbol), push the tag, and raise the `from:` pin in each app (`make check-consumers` lists them).
 - The Swift apps depend on this repo as a package by GitHub URL and tag, with two products: `HouseDesign` (tokens) and `HouseUIKit` (the hand-written menu-bar kit in `Sources/HouseUIKit/`: `HouseUI.swift`, `MenuBarPanel.swift`). Everything an app uses is `public`; adding a kit view means a public type, a public `init` and a public `body`. An app's own panel code goes in app-local files (`MenuBarPanelView.swift`, `MenuBarPanelController.swift`), never in the package. `make check-consumers` fails on a missing pin, a relative-path dependency or a copied source file.
 - Never hand-edit a generated file. Generators must stay deterministic: no

@@ -161,7 +161,7 @@
         },
         {
           "repo": "local-dictation",
-          "path": "src/settings_window.rs"
+          "path": "src/settings_window/mod.rs"
         }
       ],
       "mockup": "Modernize HouseDesign system (direction 1b, Slate)",

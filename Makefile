@@ -1,4 +1,4 @@
-.PHONY: scrub scrub-history gen swift rust check check-consumers family-check test icons lint lint-strict lint-baselines components components-check hooks
+.PHONY: build scrub scrub-history gen swift rust check check-consumers family-check test icons lint lint-strict lint-baselines components components-check hooks
 
 PY ?= python3
 HOUSE ?= ..
@@ -7,8 +7,15 @@ HOUSE ?= ..
 REPO_PATHS = $(sort $(patsubst %/.git,%,$(wildcard $(HOUSE)/*/.git)))
 
 SWIFT_SRC = Sources/HouseDesign/HouseDesign.swift
+# Warnings are errors on the command line only. Never as unsafeFlags in
+# Package.swift: apps that depend on this package would refuse it.
+SWIFT_FLAGS = -Xswiftc -warnings-as-errors
 
 gen: swift rust
+
+# Library only: there is no install target.
+build:
+	swift build $(SWIFT_FLAGS)
 
 swift:
 	$(PY) gen/gen-swift.py --out $(SWIFT_SRC)
@@ -69,12 +76,12 @@ scrub-history:
 test:
 	@$(MAKE) --no-print-directory scrub check
 	@HOUSE_ALLOW_MISSING=1 $(MAKE) --no-print-directory check-consumers components-check
-	swift test
+	swift test $(SWIFT_FLAGS)
 	HOUSE_ALLOW_MISSING=1 $(PY) -m unittest discover -s tests -v
 
 # The whole family: every sibling must be cloned next to this repo. Nothing is
 # skipped, so a missing consumer, a drifted copy or a bad path all fail.
 family-check:
 	@$(MAKE) --no-print-directory scrub check check-consumers components-check
-	swift test
+	swift test $(SWIFT_FLAGS)
 	$(PY) -m unittest discover -s tests -v
