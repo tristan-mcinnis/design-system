@@ -119,7 +119,6 @@ MANIFESTS = {
     "quick-launch/Package.swift": PACKAGE_SWIFT,
     "rti/RTI/project.yml": PROJECT_YML,
     "cotype/Package.swift": PACKAGE_SWIFT,
-    "memory-menubar/Package.swift": PACKAGE_SWIFT,
     "usage-menubar/Package.swift": PACKAGE_SWIFT,
     "local-models/menubar/LocalModelsBar/Package.swift": PACKAGE_SWIFT,
 }
@@ -179,8 +178,8 @@ class ConsumerPins(unittest.TestCase):
         self.assertIn("rti/RTI/project.yml does not depend on house-chat-core", run.stdout)
 
     def test_copied_source_file_is_red(self):
-        copy = self.house / "memory-menubar/Sources/MemoryBar/HouseUI.swift"
-        copy.parent.mkdir(parents=True)
+        copy = self.house / "cotype/Sources/CotypeMenuApp/HouseUI.swift"
+        copy.parent.mkdir(parents=True, exist_ok=True)
         copy.write_text("// copy\n")
         run = self.check()
         self.assertNotEqual(run.returncode, 0)

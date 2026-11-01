@@ -20,7 +20,10 @@ looks; this file says how its Swift is written, tested, and built. Rust apps
 | --- | --- | --- | --- | --- |
 | quick-launch | macOS 26 | 6.2 | Swift Testing | The reference repo. |
 | rti | macOS 14 | Xcode, Swift 6.0 | XCTest | Highest legacy count (DispatchQueue, `nonisolated(unsafe)`). |
-| cotype, usage-menubar, local-models | macOS 14 | 5.10 | XCTest | Hold at floor; migrate as a unit, not per file. |
+| cotype, local-models | macOS 14 | 5.10 | XCTest | Hold at floor; migrate as a unit, not per file. |
+| usage-menubar | macOS 14 | 5.10 | XCTest and Swift Testing, separate targets | Hold; never both in one target. |
+| house-chat-core | macOS 14 | 6.0 | Swift Testing | Shared library; pinned by tag. |
+| design-system | macOS 14, iOS 17 | 5.9 | XCTest | Shared library; pinned by tag. |
 | memory-recall | macOS 14 | 5.9 | XCTest | Same hold; the one repo below 5.10. |
 | a new app | macOS 26, or iOS 26 | 6.2, `swiftLanguageMode(.v6)` | Swift Testing | Starts on the rule from day one. |
 
@@ -55,8 +58,8 @@ when a repo has the need, and record it here.
 
 ## Build and verify
 
-- SwiftPM repos: `swift build`, `swift test`, then the repo's `scripts/build-app.sh` and `make install` or `scripts/install.sh`.
-- RTI: `xcodebuild -project RTI/RTI.xcodeproj -scheme RTI build`, then `scripts/install-local.sh`.
+- Every repo: `make build`, `make test`, `make install` (a library has no install). Warnings are errors: SwiftPM repos pass `-Xswiftc -warnings-as-errors` in the Makefile, never `unsafeFlags` in `Package.swift` (it breaks packages that depend on it); RTI sets it in `project.yml`. Fix a warning; never silence it.
+- `xcodebuild` output goes through `xcbeautify --quiet` (installed by Homebrew) so an agent reads the errors, not the wall of text.
 - Before reporting done: tests green, `$DS/bin/design-lint --strict` clean on touched files, and the app opened and seen.
 - No `/Users/...` paths, no shell interpolation in `Process`, secrets in Keychain or a 0600 file. Each repo's `CLAUDE.md` names its resolvers.
 

@@ -35,7 +35,6 @@ CONSUMERS = [
     ("quick-launch", "Package.swift", (DESIGN_URL, CHAT_URL)),
     ("rti", "RTI/project.yml", (DESIGN_URL, CHAT_URL)),
     ("cotype", "Package.swift", (DESIGN_URL,)),
-    ("memory-menubar", "Package.swift", (DESIGN_URL,)),
     ("usage-menubar", "Package.swift", (DESIGN_URL,)),
     ("local-models", "menubar/LocalModelsBar/Package.swift", (DESIGN_URL,)),
 ]

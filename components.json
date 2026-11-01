@@ -156,10 +156,6 @@
           "path": "Sources/CotypeMenuApp/SettingsView.swift"
         },
         {
-          "repo": "memory-menubar",
-          "path": "Sources/MemoryBar/SettingsView.swift"
-        },
-        {
           "repo": "local-dictation",
           "path": "src/settings_window/mod.rs"
         }
@@ -173,10 +169,6 @@
         {
           "repo": "cotype",
           "path": "Sources/CotypeMenuApp/RenderProof.swift"
-        },
-        {
-          "repo": "memory-menubar",
-          "path": "Sources/MemoryBar/RenderProof.swift"
         },
         {
           "repo": "local-dictation",
@@ -244,10 +236,6 @@
         {
           "repo": "cotype",
           "path": "Sources/CotypeMenuApp/RenderProof.swift"
-        },
-        {
-          "repo": "memory-menubar",
-          "path": "Sources/MemoryBar/RenderProof.swift"
         }
       ]
     },
@@ -280,10 +268,6 @@
           "path": "Sources/CotypeMenuApp/RenderProof.swift"
         },
         {
-          "repo": "memory-menubar",
-          "path": "Sources/MemoryBar/RenderProof.swift"
-        },
-        {
           "repo": "local-models",
           "path": "menubar/LocalModelsBar/Sources/LocalModelsBar/RenderProof.swift"
         },
@@ -310,10 +294,6 @@
         {
           "repo": "memory-recall",
           "path": "Sources/RecallCore/HouseTerminal.swift"
-        },
-        {
-          "repo": "memory-screenctx",
-          "path": "Sources/ScreenctxCore/HouseTerminal.swift"
         }
       ],
       "mockup": "Modernize HouseDesign system (direction 1b, Slate)",
@@ -399,10 +379,6 @@
         {
           "repo": "cotype",
           "path": "Sources/CotypeMenuApp/AppDelegate.swift"
-        },
-        {
-          "repo": "memory-menubar",
-          "path": "Sources/MemoryBar/AppDelegate.swift"
         },
         {
           "repo": "local-models",

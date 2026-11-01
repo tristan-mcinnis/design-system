@@ -45,11 +45,9 @@ VIEW_REPOS = {
     "rti": "RTI/Sources/UI",
     "local-dictation": "src/menubar",
     "cotype": "Sources/CotypeMenuApp",
-    "memory-menubar": "Sources/MemoryBar",
     "usage-menubar": "Sources/UsageBar",
     "local-models": "menubar/LocalModelsBar/Sources/LocalModelsBar",
     "memory-recall": "Sources/RecallCore",
-    "memory-screenctx": "Sources/ScreenctxCore",
     "design-system": "icons",
 }
 
