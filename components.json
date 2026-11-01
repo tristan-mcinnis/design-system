@@ -396,8 +396,8 @@
       "mockup": "Modernize HouseDesign system (direction 1b, Slate)",
       "proof": [
         {
-          "repo": "memory-menubar",
-          "path": "Sources/MemoryBar/RenderProof.swift"
+          "repo": "cotype",
+          "path": "Sources/CotypeMenuApp/RenderProof.swift"
         }
       ],
       "qualifier": "every menu-bar app"
