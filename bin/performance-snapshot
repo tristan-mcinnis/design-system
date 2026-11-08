@@ -99,9 +99,10 @@ class Matcher:
     """A service rule anchored to ONE entrypoint field, not arbitrary argv text.
 
     `pattern` is matched as a substring only against the chosen anchored field.
-    A rule that anchors `exe` to `local-tts` therefore fires only for a process
-    whose executable is literally `local-tts` — never for an argument that merely
-    mentions it (e.g. `--git-repo local-tts`), which classified the tool itself.
+    A rule that anchors `exe` to `LocalModelsBar` therefore fires only for a
+    process whose executable is literally `LocalModelsBar`, never for an argument
+    that merely mentions it (e.g. `--git-repo local-models`), which once
+    classified the tool itself.
     """
     __slots__ = ("label", "group", "kind", "pattern")
 
@@ -174,16 +175,10 @@ SERVICE_MATCHERS = (
     Matcher("local-models-vision-server", "local-models", "module", "mlx_vlm.server"),
     Matcher("local-models-daemon", "local-models", "script", "local-models/server/serve.py"),
     Matcher("local-models-bar", "local-models", "exe", "LocalModelsBar"),
-    Matcher("pocket-tts", "voice", "exe", "pocket-tts"),
-    Matcher("pocket-tts", "voice", "module", "pocket_tts"),
-    Matcher("local-tts", "voice", "exe", "local-tts"),
-    Matcher("local-tts", "voice", "script", "/.local/bin/local-tts"),
-    Matcher("screenctx", "screen", "exe", "screenctx"),
     Matcher("dictation", "dictation", "bundle", "Local Dictation"),
     Matcher("cotype", "cotype", "bundle", "Cotype"),
     Matcher("quick-launch", "quick-launch", "bundle", "Quick Launch"),
     Matcher("rti", "rti", "bundle", "RTI"),
-    Matcher("memory", "memory", "bundle", "Memory"),
     Matcher("usage", "usage", "bundle", "Usage"),
 )
 

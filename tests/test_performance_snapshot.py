@@ -167,18 +167,14 @@ class Discovery(unittest.TestCase):
         procs = [
             self.row(100, 1, "python3 /Users/example/Documents/code/house/local-models/server/serve.py --port 8080"),
             self.row(102, 1, "python3 -m mlx_vlm.server --host 127.0.0.1"),
-            self.row(103, 1, "/Users/example/.local/bin/screenctx"),
             self.row(104, 1, "/Applications/LocalModelsBar/Contents/MacOS/LocalModelsBar"),
-            self.row(105, 1, "python3 -m pocket_tts --port 8081"),
             self.row(106, 1, "/Applications/Usage.app/Contents/MacOS/Usage"),
         ]
         MOD.classify(procs)
         got = {p["pid"]: p["service"] for p in procs}
         self.assertEqual(got[100], "local-models-daemon")
         self.assertEqual(got[102], "local-models-vision-server")
-        self.assertEqual(got[103], "screenctx")
         self.assertEqual(got[104], "local-models-bar")
-        self.assertEqual(got[105], "pocket-tts")
         self.assertEqual(got[106], "usage")
 
     def test_descendants_are_inherited(self):
@@ -209,22 +205,22 @@ class Discovery(unittest.TestCase):
         self.assertEqual(procs[1]["relationship"], "descendant")
 
     def test_process_closure_includes_all_descendants_only(self):
-        procs = [self.row(500, 1, "screenctx"),
+        procs = [self.row(500, 1, "LocalModelsBar"),
                  self.row(501, 500, "helper"),
                  self.row(502, 501, "helper"),
-                 self.row(600, 1, "screenctx")]
+                 self.row(600, 1, "LocalModelsBar")]
         self.assertEqual(MOD.process_closure(procs, [500]), {500, 501, 502})
 
     def test_explicit_exclusion_overrides_service_matches(self):
         # All rows would match without exclusion. This exercises the closure,
         # rather than relying on a sampler name not matching a service rule.
-        procs = [self.row(500, 1, "screenctx"),
-                 self.row(501, 500, "screenctx"),
-                 self.row(502, 501, "screenctx"),
-                 self.row(600, 1, "screenctx")]
+        procs = [self.row(500, 1, "LocalModelsBar"),
+                 self.row(501, 500, "LocalModelsBar"),
+                 self.row(502, 501, "LocalModelsBar"),
+                 self.row(600, 1, "LocalModelsBar")]
         MOD.classify(procs, exclude_pids=[500])
         self.assertTrue(all(row["service"] is None for row in procs[:3]))
-        self.assertEqual(procs[3]["service"], "screenctx")
+        self.assertEqual(procs[3]["service"], "local-models-bar")
 
     def test_custom_matchers(self):
         Matcher = MOD.Matcher
@@ -237,15 +233,18 @@ class Discovery(unittest.TestCase):
 
     def test_anchor_matches_entrypoint_not_argument_text(self):
         # A matcher must fire on the executable/entrypoint, never on a mention of
-        # the name in an argument (--git-repo local-tts) or a shell command.
+        # the name in an argument (--git-repo local-models) or a shell command.
         self.assertIsNone(MOD.match_service(
-            "python3 /usr/local/bin/performance-snapshot --git-repo local-tts"))
+            "python3 /usr/local/bin/performance-snapshot --git-repo local-models"))
         self.assertIsNone(MOD.match_service(
-            "python3 /usr/local/bin/performance-snapshot --git-repo /Users/example/workspace/local-tts"))
+            "python3 /usr/local/bin/performance-snapshot --git-repo /Users/example/workspace/local-models"))
         self.assertIsNone(MOD.match_service(
-            "zsh -c \"cd /repo/local-tts && make\""))
-        self.assertIsNone(MOD.match_service("bash /repo/local-tts/run.sh"))
-        self.assertIsNone(MOD.match_service("git -C /repo/local-tts status"))
+            "zsh -c \"cd /repo/local-models && make\""))
+        self.assertIsNone(MOD.match_service(
+            "zsh -c \"python3 /repo/local-models/server/serve.py\""))
+        self.assertIsNone(MOD.match_service("bash /repo/local-models/run.sh"))
+        self.assertIsNone(MOD.match_service("git -C /repo/local-models status"))
+        self.assertIsNone(MOD.match_service("echo LocalModelsBar"))
 
     def test_shell_echo_of_an_app_path_is_not_a_service(self):
         # The bundle matcher must anchor to the executable path, not to a path
@@ -271,13 +270,6 @@ class Discovery(unittest.TestCase):
         # PID 19220: Local Models menu bar app (bundle name has a space).
         lm = "/Applications/Local Models.app/Contents/MacOS/LocalModelsBar"
         self.assertEqual(MOD.match_service(lm, exec_path=lm).label, "local-models-bar")
-        # PID 98779: local-tts service binary.
-        ptts = "/Users/example/.local/libexec/local-tts/pocket-tts --server --port 8081"
-        self.assertEqual(MOD.match_service(ptts, exec_path="/Users/example/.local/libexec/local-tts/pocket-tts").label,
-                         "pocket-tts")
-        # PID 98622: screen context collector.
-        sc = "/Users/example/.local/bin/screenctx collect"
-        self.assertEqual(MOD.match_service(sc, exec_path="/Users/example/.local/bin/screenctx").label, "screenctx")
 
     def test_bundle_executable_names_are_space_safe(self):
         # App bundle names contain spaces; exe_basename must not truncate them.
@@ -471,12 +463,12 @@ class Snapshot(unittest.TestCase):
         self.assertTrue(any("footprint(1) not run" in l for l in snap["limitations"]))
 
     def test_tool_and_its_children_are_not_classified(self):
-        # A snapshot invoked as `performance-snapshot --git-repo local-tts` must
-        # not classify ITSELF (or its transient children) as a service: the
+        # A snapshot invoked as `performance-snapshot --git-repo local-models`
+        # must not classify ITSELF (or its transient children) as a service: the
         # matcher anchors to the entrypoint, not to the argument text.
         ps = (
-            "100  1  30000  0:01.00 /Users/example/.local/libexec/local-tts/pocket-tts --server --port 8081\n"
-            "500  1  40000  0:00.10 python3 /usr/local/bin/performance-snapshot --git-repo local-tts\n"
+            "100  1  30000  0:01.00 python3 /Users/example/Documents/code/house/local-models/server/serve.py --ensure-vision\n"
+            "500  1  40000  0:00.10 python3 /usr/local/bin/performance-snapshot --git-repo local-models\n"
             "501  500  20000  0:00.00 python3 -c pass\n"
         )
         runner = make_runner([ps])
@@ -486,10 +478,10 @@ class Snapshot(unittest.TestCase):
                 mock.patch.object(MOD, "sleep", lambda s: None):
             snap = MOD.snapshot_fleet(config, runner)
         pids = {p["pid"] for p in snap["processes"]}
-        self.assertIn(100, pids, "the real pocket-tts service must be tracked")
+        self.assertIn(100, pids, "the real local-models daemon must be tracked")
         self.assertNotIn(500, pids, "the tool itself must not be classified")
         self.assertNotIn(501, pids, "the tool's child must not be classified")
-        self.assertNotIn("local-tts", snap["sampling"]["matched_services"])
+        self.assertEqual(snap["sampling"]["matched_services"], ["local-models-daemon"])
 
     def test_footprint_when_enabled(self):
         ps = "100  1  50000  0:01.00 python3 .../local-models/server/serve.py\n"

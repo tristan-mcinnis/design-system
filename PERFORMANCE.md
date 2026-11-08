@@ -129,7 +129,7 @@ The final 60-second fleet observation is a health screen, not a controlled five-
 
 Rollback artifacts are outside Git under `~/Library/Application Support/HousePerformance/rollback-20260906/`: original signed Memory.app, original recall executable, original launchd plists and a source archive of Local Models before changes.
 
-- Memory: quit the app, move the current bundle aside, restore the preserved signed bundle to `/Applications/Memory.app`, verify its signature and reopen it.
+- Memory: historical only. Memory.app was sunset on 2026-10-18 and `bin/performance-snapshot` no longer matches it. Do not restore the preserved bundle.
 - Recall: restore the preserved executable to the installed symlink target, then run `install.sh --no-build` and its read-only doctor check. The old executable SHA is recorded below.
 - Local Models: if recovery is needed, restore `server/serve.py` and `server/backends/mlx_vlm.py` from the source archive and run `make restart`, checking model warm state again. Do not recreate the redundant wildcard-bound server.
 
