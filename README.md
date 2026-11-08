@@ -7,7 +7,7 @@ performance audit, benchmark budgets, and safe optimization boundaries.
 - `tokens.json` is the single source of every value (light and dark).
 - `make gen` renders `Sources/HouseDesign/HouseDesign.swift` (AppKit and UIKit in one file, all public) and `generated/house_theme.rs`.
 - `python3 icons/make-icon.py --glyph bolt --out AppIcon.icns` renders an app icon.
-- `make test` is standalone: it passes on a fresh clone with no siblings (it sets `HOUSE_ALLOW_MISSING=1`, so absent siblings are skipped and present ones are still checked). It also runs `swift test`. `make family-check` needs every sibling cloned next to this repo by folder name (rti, ledger, not the GitHub names) and fails on a missing, drifted or broken one. `make check-consumers` and `make components-check` fail on a missing sibling unless `HOUSE_ALLOW_MISSING=1`.
+- `make test` is standalone: it passes on a fresh clone with no siblings (it sets `HOUSE_ALLOW_MISSING=1`, so absent siblings are skipped and present ones are still checked). It also runs `swift test`. `make family-check` needs every sibling cloned next to this repo by folder name (rti, not the GitHub name rti-personal) and fails on a missing, drifted or broken one. `make check-consumers` and `make components-check` fail on a missing sibling unless `HOUSE_ALLOW_MISSING=1`.
 
 ## Using it from an app
 

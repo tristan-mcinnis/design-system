@@ -239,8 +239,7 @@ def cmd_check(args):
     if absent_repos and not allow:
         print("\nABSENT SIBLING REPOS (clone them next to design-system, or run with "
               "--allow-missing / HOUSE_ALLOW_MISSING=1 for a standalone check)")
-        print("  folder names, not GitHub names: rti-personal is the folder rti, "
-              "memory-ledger is the folder ledger")
+        print("  folder names, not GitHub names: rti-personal is the folder rti")
     if missing:
         print("\nMISSING PATHS")
         for key, kind, path in missing:
