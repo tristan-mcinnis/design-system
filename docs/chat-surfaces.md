@@ -27,7 +27,8 @@ Two of its names differ from the house names. This file uses house names only.
 | proseLineSpacing | `Size.body × LineHeight.body` minus SF's native line height (about 5 pt) | `proseLineSpacing` |
 
 subheading, glyphSmall, and glyphMedium are derived from token sizes, not
-tokens. Copy the three definitions from `DesignTokens.swift` lines 108 to 139.
+tokens. Copy the `subheading`, `glyphMedium`, `glyphSmall` and
+`proseLineSpacing` definitions from `AQDesign.TypeToken` in `DesignTokens.swift`.
 
 ## 1. Chat header
 
@@ -111,8 +112,7 @@ the key caps. A toggle scrolls the message's first line to the top.
 
 **Keys.** PageUp and PageDown (or `⌥↑` `⌥↓` on an empty composer) scroll a page
 (the view height less `Spacing.xxxl`). `⌘↑` and `⌘↓` jump to the top and the
-bottom. `⌘R` asks again. `⌘[` and `⌘]` switch chats. The question card keeps
-`↑↓` and `↩` while it is live.
+bottom. `⌘R` asks again. `⌘[` and `⌘]` switch chats.
 
 **Accessibility.** The pill reads "You: <text>" to VoiceOver (a spoken label,
 never a drawn one). Errors post a high-priority announcement ("Error. …");
@@ -121,8 +121,8 @@ scrolls jump without animation and the thinking dots stand still at 55 %.
 Tool lines combine into one element each; the sources list is a container named "Sources".
 
 **Copy.** `Sources/Views/QuickAIThread.swift` (whole file),
-`CollapsibleMessageText.swift`, `MarkdownTextView.swift`, `CodeBlockView.swift`,
-`AskUserQuestionCard.swift`; `ThinkingIndicator` from `OverlayView.swift` (line 1368).
+`CollapsibleMessageText.swift`, `MarkdownTextView.swift`, `CodeBlockView.swift`;
+`ThinkingIndicator` from `OverlayChrome.swift`.
 
 ## 3. Composer row
 
@@ -177,7 +177,7 @@ window, "Search chats" in a list. The field group's value is "<action>, <keys>".
 The circles are "Add Context" and "Actions", each with value "Open" or "Closed".
 
 **Copy.** `Sources/Views/QuickAIComposer.swift`, `QuickAIFloatingChooser.swift`;
-`ComposerKeyRouting` from `OverlayView.swift`; action and placeholder rules from
+`ComposerKeyRouting` from `OverlayChrome.swift`; action and placeholder rules from
 `QuickViewModel.quickAIComposerAction` and `quickAIComposerPlaceholder`.
 
 ## 4. Attachment chips and strip
@@ -361,7 +361,7 @@ header, thread, and composer grammar for the parts where a person asks.
 | subheading 13 semibold, glyphSmall 14 semibold, glyphMedium 16 semibold | `DesignTokens.swift` |
 | Collapse control height `Control.chip − 6` (22) | `CollapsibleMessageText.swift` |
 | `KeyHint` gap 6 and label ink at 80 %; `KeyCap` side padding 6 | `SlateChrome.swift` |
-| Thinking dots 5 pt, gap 3, 0.35 s step | `OverlayView.swift` `ThinkingIndicator` |
+| Thinking dots 5 pt, gap 3, 0.35 s step | `OverlayChrome.swift` `ThinkingIndicator` |
 | Attachment name max 180; `⌘K` palette 520 wide, 460 max high | `Services/PanelSizing.swift` |
 | Open-chat marker 2 wide (`Spacing.xxs / 2`); traffic-light inset 88 | `AIChatWindowView.swift` |
 
