@@ -149,24 +149,6 @@ def glyph_gauge(d, box, fill):
     d.ellipse([cx - hub, cy - hub, cx + hub, cy + hub], fill=fill)
 
 
-def glyph_tray(d, box, fill):
-    """A tray, as SF Symbols draws it: an outlined box and a lip with a dip
-    where a sheet sits. Proposals wait here for a verdict (Chief of Staff)."""
-    x0, y0, w, h = box
-    stroke = w * 0.10
-    left, right = x0 + w * 0.02, x0 + w * 0.98
-    top, bottom = y0 + h * 0.12, y0 + h * 0.88
-    d.rounded_rectangle([left, top, right, bottom], radius=w * 0.20, outline=fill, width=int(round(stroke)))
-    lip = y0 + h * 0.54
-    dip = y0 + h * 0.70
-    pts = [(left + stroke / 2, lip), (x0 + w * 0.30, lip), (x0 + w * 0.38, dip), (x0 + w * 0.62, dip),
-           (x0 + w * 0.70, lip), (right - stroke / 2, lip)]
-    d.line(pts, fill=fill, width=int(round(stroke)), joint="curve")
-    # round the two bends of the dip so the line reads as one stroke
-    for px, py in pts[1:5]:
-        d.ellipse([px - stroke / 2, py - stroke / 2, px + stroke / 2, py + stroke / 2], fill=fill)
-
-
 GLYPHS = {
     "bolt": glyph_bolt,
     "memory": glyph_memory,
@@ -176,7 +158,6 @@ GLYPHS = {
     "cotype": glyph_cotype,
     "models": glyph_models,
     "gauge": glyph_gauge,
-    "tray": glyph_tray,
 }
 
 
